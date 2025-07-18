@@ -49,6 +49,8 @@ if include_strategy_note:
 • Balance amount of Rs. 28.00 lacs will be invested into Debt funds, we will start STP (Systematic Transfer Plan) of Rs. 3.50 lacs every fortnight or according to the market opportunities from Debt Funds to Equity Funds till August 2025.""", height=150)
 
 # --- Table State Management & Generation ---
+# Initialize all DataFrames in st.session_state at the top of the script.
+# This ensures a consistent state on every rerun, preventing the ValueError.
 if 'lumpsum_df' not in st.session_state:
     st.session_state.lumpsum_df = pd.DataFrame(columns=["Category", "SubCategory", "Scheme Name", "Allocation (%)", "Amount"])
 if 'sip_df' not in st.session_state:
@@ -61,12 +63,13 @@ if 'initial_stp_df' not in st.session_state:
 if 'final_stp_df' not in st.session_state:
     st.session_state.final_stp_df = pd.DataFrame(columns=["Category", "SubCategory", "Scheme Name", "Allocation (%)", "Amount"])
 
+# The display function now simply calls the data editor.
+# The `key` ensures the widget's state is managed correctly by Streamlit.
 def display_editable_table(title, df_key):
     st.subheader(title)
-    # The widget automatically updates st.session_state[df_key]
     st.data_editor(st.session_state[df_key], num_rows="dynamic", use_container_width=True, key=df_key)
 
-
+# Use conditionals to display the widgets, but the state is already initialized.
 include_lumpsum = st.checkbox("Include Lumpsum Allocation Table")
 if include_lumpsum:
     display_editable_table("Lumpsum Allocation", 'lumpsum_df')
@@ -228,6 +231,8 @@ Sahayak Associates is an AMFI Registered Mutual Fund Distributor only.
 
 # --- PDF Generator ---
 def generate_pdf():
+    # Retrieve the edited DataFrames from session state.
+    # The data_editor widgets automatically updated these variables.
     lumpsum_df_final = st.session_state.lumpsum_df.copy()
     sip_df_final = st.session_state.sip_df.copy()
     initial_stp_df_final = st.session_state.initial_stp_df.copy()
@@ -281,6 +286,7 @@ def generate_pdf():
         ]
 
     tables = []
+    # Only append DataFrames to the PDF elements if their corresponding checkbox is checked.
     if include_lumpsum and not lumpsum_df_final.empty:
         tables.append(("Lumpsum Allocation", lumpsum_df_final))
     if include_sip and not sip_df_final.empty:
