@@ -13,8 +13,8 @@ from reportlab.platypus import KeepTogether
 from reportlab.lib.enums import TA_LEFT
 
 # Static assets
-LOGO = "static/logo.png"
-FOOTER = "static/footer.png"
+LOGO = "logo.png"
+FOOTER = "footer.png"
 
 st.set_page_config(page_title="Investment Sheet Generator", layout="centered")
 st.title("Investment Sheet Generator")
