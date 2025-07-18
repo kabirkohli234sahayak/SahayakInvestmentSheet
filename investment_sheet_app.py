@@ -64,7 +64,7 @@ if 'final_stp_df' not in st.session_state:
 
 def display_editable_table(title, df_key):
     st.subheader(title)
-    # The data_editor now handles all state updates implicitly
+    # The data_editor now handles all state updates implicitly with the key
     st.data_editor(st.session_state[df_key], num_rows="dynamic", use_container_width=True, key=df_key)
 
 
