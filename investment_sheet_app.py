@@ -12,7 +12,7 @@ from PyPDF2 import PdfMerger
 from reportlab.platypus import KeepTogether
 from reportlab.lib.enums import TA_LEFT
 
-# Static assets
+# Updated file paths to remove the 'static/' folder prefix
 LOGO = "logo.png"
 FOOTER = "footer.png"
 
@@ -49,33 +49,56 @@ if include_strategy_note:
 • An amount of Rs 7.00 Lacs will be invested directly into Equity Funds.
 • Balance amount of Rs. 28.00 lacs will be invested into Debt funds, we will start STP (Systematic Transfer Plan) of Rs. 3.50 lacs every fortnight or according to the market opportunities from Debt Funds to Equity Funds till August 2025.""", height=150)
 
-# --- Tables ---
-def editable_table(title, default_rows, key):
+# --- Table State Management & Generation ---
+if 'lumpsum_df' not in st.session_state:
+    st.session_state.lumpsum_df = pd.DataFrame(columns=["Category", "SubCategory", "Scheme Name", "Allocation (%)", "Amount"])
+if 'sip_df' not in st.session_state:
+    st.session_state.sip_df = pd.DataFrame(columns=["Category", "SubCategory", "Scheme Name", "Allocation (%)", "Amount"])
+    
+if 'fund_perf_df' not in st.session_state:
+    st.session_state.fund_perf_df = pd.DataFrame([{"Scheme Name": "HDFC Mid Cap Fund", "PE": 25.5, "SD": 15.0, "SR": 1.2, "Beta": 0.9, "Alpha": 1.5, "1Y": 12.3, "3Y": 15.6, "5Y": 17.8, "10Y": 19.2}])
+if 'initial_stp_df' not in st.session_state:
+    st.session_state.initial_stp_df = pd.DataFrame(columns=["Category", "SubCategory", "Scheme Name", "Allocation (%)", "Amount"])
+if 'final_stp_df' not in st.session_state:
+    st.session_state.final_stp_df = pd.DataFrame(columns=["Category", "SubCategory", "Scheme Name", "Allocation (%)", "Amount"])
+
+def display_editable_table(title, df_key, total_amount_str=None):
     st.subheader(title)
-    df = pd.DataFrame(default_rows if default_rows else [{"Category": "", "SubCategory": "", "Scheme Name": "", "Allocation (%)": "", "Amount": ""}])
-    return st.data_editor(df, num_rows="dynamic", use_container_width=True, key=key)
+    edited_df = st.data_editor(st.session_state[df_key], num_rows="dynamic", use_container_width=True)
+    st.session_state[df_key] = edited_df
+
+    if total_amount_str is not None:
+        try:
+            total_investment = float(total_amount_str.replace(",", ""))
+        except (ValueError, AttributeError):
+            total_investment = 0
+            
+        if total_investment > 0:
+            st.session_state[df_key]['Amount'] = pd.to_numeric(st.session_state[df_key]['Amount'], errors='coerce').fillna(0)
+            st.session_state[df_key]['Allocation (%)'] = (st.session_state[df_key]['Amount'] / total_investment) * 100
+            st.session_state[df_key] = st.session_state[df_key].copy()
+
 
 include_lumpsum = st.checkbox("Include Lumpsum Allocation Table")
 if include_lumpsum:
-    lumpsum_alloc = editable_table("Lumpsum Allocation", [{"Category": "Equity", "SubCategory": "Mid Cap", "Scheme Name": "HDFC Mid Cap Fund", "Allocation (%)": 50, "Amount": 100000}], key="lumpsum")
+    display_editable_table("Lumpsum Allocation", 'lumpsum_df', investment_amount)
 
 include_sip = st.checkbox("Include SIP Allocation Table")
 if include_sip:
-    sip_alloc = editable_table("SIP Allocation", [{"Category": "Equity", "SubCategory": "Small Cap", "Scheme Name": "SBI Small Cap Fund", "Allocation (%)": 50, "Amount": 5000}], key="sip")
+    display_editable_table("SIP Allocation", 'sip_df', sip_amount)
 
 include_fund_perf = st.checkbox("Include Fund Performance Table")
 if include_fund_perf:
-    st.subheader("Fund Performance")
-    fund_perf_data = [{"Scheme Name": "HDFC Mid Cap Fund", "PE": 25.5, "SD": 15.0, "SR": 1.2, "Beta": 0.9, "Alpha": 1.5, "1Y": 12.3, "3Y": 15.6, "5Y": 17.8, "10Y": 19.2}]
-    fund_perf = st.data_editor(pd.DataFrame(fund_perf_data), num_rows="dynamic", use_container_width=True, key="fund_perf")
+    display_editable_table("Fund Performance", 'fund_perf_df')
 
 include_initial_stp = st.checkbox("Include Initial Investment Table (STP Clients Only)")
 if include_initial_stp:
-    initial_alloc = editable_table("Initial Investment Allocation", [], key="initial_stp")
+    display_editable_table("Initial Investment Allocation", 'initial_stp_df', investment_amount)
 
 include_final_stp = st.checkbox("Include Final Portfolio Table (Post STP)")
 if include_final_stp:
-    final_alloc = editable_table("Final Portfolio Allocation", [], key="final_stp")
+    display_editable_table("Final Portfolio Allocation", 'final_stp_df', investment_amount)
+
 
 st.markdown("### Fund Factsheet Links")
 factsheet_links = st.text_area("Enter links in the format:\n1. Fund Name - Description | https://link.com", height=150)
@@ -98,23 +121,19 @@ def dataframe_to_table(df):
 def fund_performance_table(df):
     df = df.dropna(how='all')
     
-    # Filter and reorder columns
     display_columns = ['Scheme Name', 'PE', 'SD', 'SR', 'Beta', 'Alpha', '1Y', '3Y', '5Y', '10Y']
     
-    # Ensure all required columns exist before selecting
     missing_cols = [col for col in display_columns if col not in df.columns]
     if missing_cols:
         st.warning(f"The following columns were not found in your input and will be skipped in the Fund Performance table: {', '.join(missing_cols)}")
         
     df_display = df.reindex(columns=display_columns)
 
-    # Create a two-row header
     header_row1 = ['', 'Ratios', '', '', '', '', 'Returns', '', '', '']
     header_row2 = list(df_display.columns)
     
     data = [header_row1, header_row2] + df_display.astype(str).values.tolist()
     
-    # Set column widths to accommodate the new column order and number
     col_widths = [5.0 * cm, 1.2 * cm, 1.2 * cm, 1.2 * cm, 1.2 * cm, 1.2 * cm, 1.2 * cm, 1.2 * cm, 1.2 * cm, 1.2 * cm]
     
     table = Table(data, colWidths=col_widths, repeatRows=2)
@@ -126,17 +145,17 @@ def fund_performance_table(df):
         ('ALIGN', (6, 0), (-1, 0), 'CENTER'),
         ('ALIGN', (0,0), (-1,0), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('ALIGN', (1,2), (-1,-1), 'RIGHT'), # Align all numerical data to the right (starting from the third row)
+        ('ALIGN', (1,2), (-1,-1), 'RIGHT'),
         ('FONTSIZE', (0,0), (-1,-1), 9),
         ('GRID', (0,0), (-1,-1), 0.25, colors.black),
         ('BACKGROUND', (0,0), (-1,1), HexColor('#E6F3F8')),
-        ('LINEBELOW', (0,0), (-1,1), 1, colors.black), # Thicker line below the header
-        ('LINEABOVE', (0,0), (-1,0), 1, colors.black), # Thicker line above header
-        ('LINEBELOW', (0,-1), (-1,-1), 1, colors.black), # Thicker line at the bottom
+        ('LINEBELOW', (0,0), (-1,1), 1, colors.black),
+        ('LINEABOVE', (0,0), (-1,0), 1, colors.black),
+        ('LINEBELOW', (0,-1), (-1,-1), 1, colors.black),
     ]))
     return table
 
-def header_footer_with_logos(canvas, doc):
+def main_header_footer(canvas, doc):
     canvas.saveState()
     width, height = A4
     if os.path.exists(LOGO):
@@ -144,19 +163,74 @@ def header_footer_with_logos(canvas, doc):
     if os.path.exists(FOOTER):
         canvas.drawImage(FOOTER, 0, 0, width=width, preserveAspectRatio=True, mask='auto')
     
+    # Page number
     page_number_text = "%d" % doc.page
+    canvas.setFont('Helvetica', 9)
+    canvas.drawCentredString(width/2.0, 15, page_number_text)
+
+    # Note at the bottom right
+    note_text = "Note: Please check the Disclaimer on the last page"
+    note_style = ParagraphStyle(name='NoteStyle', fontSize=7, leading=10, alignment=TA_LEFT)
+    
+    # Calculate position
+    text_width = canvas.stringWidth(note_text, 'Helvetica', 7)
+    x_pos = width - (text_width + 15)
+    y_pos = 15 
+    canvas.drawString(x_pos, y_pos, note_text)
+
+    canvas.restoreState()
+
+def disclaimer_header_footer(canvas, doc, start_page_num):
+    canvas.saveState()
+    width, height = A4
+    if os.path.exists(LOGO):
+        canvas.drawImage(LOGO, 260, 130, width=80, preserveAspectRatio=True, mask='auto')
+    if os.path.exists(FOOTER):
+        canvas.drawImage(FOOTER, 0, 0, width=width, preserveAspectRatio=True, mask='auto')
+    
+    # Page number
+    page_number_text = "%d" % (start_page_num + doc.page)
     canvas.setFont('Helvetica', 9)
     canvas.drawCentredString(width/2.0, 15, page_number_text)
     
     canvas.restoreState()
 
+def generate_disclaimer_pdf(start_page_num):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
+    disclaimer_style = ParagraphStyle(name='DisclaimerStyle', parent=styles['Normal'])
+    
+    disclaimer_text = """Any information provided by Sahayak & their associates does not constitute an investment advice, offer, invitation & inducement to invest in securities or other investments and Sahayak is not soliciting any action based on it. 
+Keep in mind that investing involves risk. The value of your investment will fluctuate over time, and you may gain or lose money / original capital. 
+Guidance provided by Sahayak is purely educational. Sahayak doesn’t guarantee that the information disseminated herein would result in any monetary or financial gains or loss as the information is purely educational & based on past returns & performance. 
+Past performance is not a guide for future performance. Future returns are not guaranteed, and loss of original capital may occur. 
+Before acting on any information, investor should consider whether it is suitable for their particular circumstances and if necessary, seek professional investment advice from a Registered Investment Advisor. 
+All investments especially mutual fund investments are subject to market risks. Kindly read the Offer Documents carefully before investing. 
+Sahayak does not provide legal or tax advice. The information herein is general and educational in nature and should not be considered legal or tax advice.
+Tax laws and regulations are complex and subject to change, which can materially impact investment results. 
+Sahayak doesn't guarantee that the information provided herein is accurate, complete, or timely. 
+Sahayak makes no warranties with regard to such information or results obtained by its use, and disclaim any liability arising out of your use of, or any tax position taken in reliance on such information. 
+Sahayak is a distributor of financial products and NOT an investment advisor and NOT Authorized to provide any investment advice by SEBI. 
+Sahayak Associates is an AMFI Registered Mutual Fund Distributor only.
+"""
+    disclaimer_elements = [Paragraph("<b>Disclaimer</b>", styles['Heading3'])] + [
+        Paragraph(line.strip(), disclaimer_style) for line in disclaimer_text.strip().splitlines()
+    ]
+    
+    # Use the new header/footer that correctly numbers the page
+    doc.build(disclaimer_elements, onFirstPage=lambda c, d: disclaimer_header_footer(c, d, start_page_num), onLaterPages=lambda c, d: disclaimer_header_footer(c, d, start_page_num))
+    
+    buffer.seek(0)
+    return buffer
+
 # --- PDF Generator ---
 def generate_pdf():
-    buffer = BytesIO()
+    # Generate the main PDF content (without the disclaimer page)
+    main_buffer = BytesIO()
     styles = getSampleStyleSheet()
     heading_style = ParagraphStyle(name='HeadingLarge', fontSize=20, leading=24, alignment=1, spaceAfter=20)
     client_style = ParagraphStyle(name='ClientDetails', parent=styles['Normal'], spaceAfter=6, leading=14)
-    disclaimer_style = ParagraphStyle(name='DisclaimerStyle', parent=styles['Normal'])
     note_style = ParagraphStyle(name='NoteStyle', fontSize=7, leading=10)
 
     elements = [Paragraph("Investment Sheet", heading_style)]
@@ -183,15 +257,15 @@ def generate_pdf():
 
     tables = []
     if include_lumpsum:
-        tables.append(("Lumpsum Allocation", lumpsum_alloc))
+        tables.append(("Lumpsum Allocation", st.session_state.lumpsum_df))
     if include_sip:
-        tables.append(("SIP Allocation", sip_alloc))
+        tables.append(("SIP Allocation", st.session_state.sip_df))
     if include_fund_perf:
-        tables.append(("Fund Performance", fund_perf))
+        tables.append(("Fund Performance", st.session_state.fund_perf_df))
     if include_initial_stp:
-        tables.append(("Initial Investment Allocation", initial_alloc))
+        tables.append(("Initial Investment Allocation", st.session_state.initial_stp_df))
     if include_final_stp:
-        tables.append(("Final Portfolio Allocation", final_alloc))
+        tables.append(("Final Portfolio Allocation", st.session_state.final_stp_df))
         
     for title, df in tables:
         if not df.empty:
@@ -233,32 +307,26 @@ def generate_pdf():
             else:
                 elements.append(Paragraph(line.strip(), styles['Normal']))
 
-    # Force a new page for the final disclaimer
-    elements.append(FrameBreak())
+    main_doc = SimpleDocTemplate(main_buffer, pagesize=A4)
+    main_doc.build(elements, onFirstPage=main_header_footer, onLaterPages=main_header_footer)
     
-    disclaimer_text = """Any information provided by Sahayak & their associates does not constitute an investment advice, offer, invitation & inducement to invest in securities or other investments and Sahayak is not soliciting any action based on it. 
-Keep in mind that investing involves risk. The value of your investment will fluctuate over time, and you may gain or lose money / original capital. 
-Guidance provided by Sahayak is purely educational. Sahayak doesn’t guarantee that the information disseminated herein would result in any monetary or financial gains or loss as the information is purely educational & based on past returns & performance. 
-Past performance is not a guide for future performance. Future returns are not guaranteed, and loss of original capital may occur. 
-Before acting on any information, investor should consider whether it is suitable for their particular circumstances and if necessary, seek professional investment advice from a Registered Investment Advisor. 
-All investments especially mutual fund investments are subject to market risks. Kindly read the Offer Documents carefully before investing. 
-Sahayak does not provide legal or tax advice. The information herein is general and educational in nature and should not be considered legal or tax advice.
-Tax laws and regulations are complex and subject to change, which can materially impact investment results. 
-Sahayak doesn't guarantee that the information provided herein is accurate, complete, or timely. 
-Sahayak makes no warranties with regard to such information or results obtained by its use, and disclaim any liability arising out of your use of, or any tax position taken in reliance on such information. 
-Sahayak is a distributor of financial products and NOT an investment advisor and NOT Authorized to provide any investment advice by SEBI. 
-Sahayak Associates is an AMFI Registered Mutual Fund Distributor only.
-"""
-    disclaimer_elements = [Paragraph("<b>Disclaimer</b>", styles['Heading3'])] + [
-        Paragraph(line.strip(), disclaimer_style) for line in disclaimer_text.strip().splitlines()
-    ]
-    elements.extend(disclaimer_elements)
-
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
-    doc.build(elements, onFirstPage=header_footer_with_logos, onLaterPages=header_footer_with_logos)
+    # Get the page count from the main document to start the new page numbering
+    start_page_num = main_doc.page
     
-    buffer.seek(0)
-    return buffer
+    # Generate the disclaimer PDF
+    disclaimer_buffer = generate_disclaimer_pdf(start_page_num)
+    
+    # Merge the two PDFs
+    merger = PdfMerger()
+    merger.append(main_buffer)
+    merger.append(disclaimer_buffer)
+    
+    final_buffer = BytesIO()
+    merger.write(final_buffer)
+    merger.close()
+    
+    final_buffer.seek(0)
+    return final_buffer
 
 if st.button("Generate PDF"):
     pdf = generate_pdf()
