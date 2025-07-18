@@ -64,8 +64,11 @@ if 'final_stp_df' not in st.session_state:
 
 def display_editable_table(title, df_key, total_amount_str=None):
     st.subheader(title)
-    edited_df = st.data_editor(st.session_state[df_key], num_rows="dynamic", use_container_width=True, key=df_key)
-
+    
+    # Use a unique key for each data editor to prevent ID conflicts
+    edited_df = st.data_editor(st.session_state[df_key], num_rows="dynamic", use_container_width=True, key=f"data_editor_{df_key}")
+    
+    # Perform calculations on the returned, edited DataFrame
     if total_amount_str is not None:
         try:
             total_investment = float(total_amount_str.replace(",", ""))
@@ -73,10 +76,13 @@ def display_editable_table(title, df_key, total_amount_str=None):
             total_investment = 0
             
         if total_investment > 0:
-            st.session_state[df_key]['Amount'] = pd.to_numeric(st.session_state[df_key]['Amount'], errors='coerce').fillna(0)
-            st.session_state[df_key]['Allocation (%)'] = (st.session_state[df_key]['Amount'] / total_investment) * 100
-            st.session_state[df_key] = st.session_state[df_key].copy()
-
+            # Create a temporary copy to perform calculations without affecting the main state
+            temp_df = edited_df.copy()
+            temp_df['Amount'] = pd.to_numeric(temp_df['Amount'], errors='coerce').fillna(0)
+            temp_df['Allocation (%)'] = (temp_df['Amount'] / total_investment) * 100
+            
+            # Update the session state variable at the end
+            st.session_state[df_key] = temp_df
 
 include_lumpsum = st.checkbox("Include Lumpsum Allocation Table")
 if include_lumpsum:
