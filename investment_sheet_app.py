@@ -65,20 +65,27 @@ if 'final_stp_df' not in st.session_state:
 def display_editable_table(title, df_key, total_amount_str=None):
     st.subheader(title)
     
-    # The st.data_editor widget manages the state for the given key.
-    # The key is the df_key, which ensures the session state variable is updated directly.
-    st.session_state[df_key] = st.data_editor(st.session_state[df_key], num_rows="dynamic", use_container_width=True, key=df_key)
-    
-    # Perform calculations on the session state DataFrame directly
+    # Get the current DataFrame from session state
+    current_df_in_state = st.session_state[df_key]
+
+    # Recalculate allocation percentage if a total amount is provided
     if total_amount_str is not None:
         try:
             total_investment = float(total_amount_str.replace(",", ""))
         except (ValueError, AttributeError):
             total_investment = 0
             
-        if total_investment > 0:
-            st.session_state[df_key]['Amount'] = pd.to_numeric(st.session_state[df_key]['Amount'], errors='coerce').fillna(0)
-            st.session_state[df_key]['Allocation (%)'] = (st.session_state[df_key]['Amount'] / total_investment) * 100
+        if total_investment > 0 and not current_df_in_state.empty:
+            # Ensure 'Amount' column is numeric for calculation
+            current_df_in_state['Amount'] = pd.to_numeric(current_df_in_state['Amount'], errors='coerce').fillna(0)
+            current_df_in_state['Allocation (%)'] = (current_df_in_state['Amount'] / total_investment) * 100
+            # No need for .copy() here as we are modifying in-place and then passing this object to data_editor
+            # Streamlit's data_editor will then handle the updates to st.session_state[df_key]
+
+    # Now, display the data editor. Streamlit will update st.session_state[df_key]
+    # automatically when the user edits the table.
+    st.data_editor(current_df_in_state, num_rows="dynamic", use_container_width=True, key=df_key)
+
 
 include_lumpsum = st.checkbox("Include Lumpsum Allocation Table")
 if include_lumpsum:
@@ -314,7 +321,7 @@ def generate_pdf():
                 if len(parts) == 2:
                     text = parts[0].strip()
                     url = parts[1].strip()
-                    elements.append(Paragraph(f'<link href="{url}">{text}</link>', styles['Normal']))
+                    elements.append(Paragraph(f'<link href="{url}">{url}</link>', styles['Normal'])) # Changed to display URL
 
     main_doc = SimpleDocTemplate(main_buffer, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=80, bottomMargin=60)
     main_doc.build(elements, onFirstPage=main_header_footer, onLaterPages=main_header_footer)
