@@ -3,16 +3,18 @@ import pandas as pd
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import (
-    Table, TableStyle, SimpleDocTemplate, Paragraph,
-    Spacer, PageBreak, KeepTogether
+    Table, TableStyle, SimpleDocTemplate, Paragraph, Spacer,
+    Frame, KeepTogether
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.colors import HexColor
 from reportlab.lib.units import cm
 from io import BytesIO
-import os
+from reportlab.lib.enums import TA_LEFT
 from PyPDF2 import PdfMerger
+import os
 
+# Static assets
 LOGO = "logo.png"
 FOOTER = "footer.png"
 
@@ -20,66 +22,77 @@ st.set_page_config(page_title="Investment Sheet Generator", layout="centered")
 st.title("Investment Sheet Generator")
 
 # --- Input Fields ---
+st.header("Client Information")
 client_name = st.text_input("Client Name")
 report_date = st.text_input("Date")
 financial_goal = st.text_input("Financial Goal")
 investment_horizon = st.selectbox("Investment Horizon", ["Short Term", "Medium Term", "Long Term"])
 risk_profile = st.selectbox("Risk Profile", ["Conservative", "Moderate", "Aggressive"])
 
-default_return = {"Aggressive": "12-15%", "Moderate": "10-12%", "Conservative": "8-10%"}
-return_expectation = st.text_input("Return Expectation", default_return.get(risk_profile, ""))
-
+default_return = {"Conservative": "8-10%", "Moderate": "10-12%", "Aggressive": "12-15%"}.get(risk_profile, "")
+return_expectation = st.text_input("Return Expectation", value=default_return)
 investment_amount = st.text_input("Investment Amount (Lumpsum)")
 sip_amount = st.text_input("SIP Amount (Monthly)")
 
 # Strategy Note
-include_strategy = st.checkbox("Include STP / Hybrid Strategy Description")
-if include_strategy:
-    st.markdown("### Investment Strategy Note")
-    strategy_note = st.text_area("Enter bullet points using '-' or '*'", value="""- Rs. 7 Lacs in Equity Funds\n- Rs. 28 Lacs in Debt Funds via STP till Aug 2025""")
+include_strategy_note = st.checkbox("Include STP / Hybrid Strategy Description")
+strategy_note = ""
+if include_strategy_note:
+    strategy_note = st.text_area("Strategy Description", height=150, value="""Out of Rs. 35.00 lacs,
+• An amount of Rs 7.00 Lacs will be invested directly into Equity Funds.
+• Balance amount of Rs. 28.00 lacs will be invested into Debt funds, we will start STP (Systematic Transfer Plan) of Rs. 3.50 lacs every fortnight or according to the market opportunities from Debt Funds to Equity Funds till August 2025.""")
 
-# Table Data
+# --- Table Handling ---
+def init_df(key, columns):
+    if key not in st.session_state:
+        st.session_state[key] = pd.DataFrame(columns=columns)
+
 def editable_df(title, key):
     st.subheader(title)
+    init_df(key, ["Category", "SubCategory", "Scheme Name", "Allocation (%)", "Amount"])
+    return st.data_editor(st.session_state[key], num_rows="dynamic", use_container_width=True, key=key)
+
+def editable_perf_table(key):
     if key not in st.session_state:
-        st.session_state[key] = pd.DataFrame(columns=["Category", "SubCategory", "Scheme Name", "Allocation (%)", "Amount"])
-    st.session_state[key] = st.data_editor(st.session_state[key], num_rows="dynamic", use_container_width=True, key=key)
-    return st.session_state[key]
+        st.session_state[key] = pd.DataFrame([{
+            "Scheme Name": "HDFC Mid Cap Fund", "PE": 25.5, "SD": 15.0, "SR": 1.2,
+            "Beta": 0.9, "Alpha": 1.5, "1Y": 12.3, "3Y": 15.6, "5Y": 17.8, "10Y": 19.2
+        }])
+    return st.data_editor(st.session_state[key], num_rows="dynamic", use_container_width=True, key=key)
 
-include_tables = {}
+tables = {}
 
-include_tables["Lumpsum Allocation"] = st.checkbox("Include Lumpsum Allocation Table")
-if include_tables["Lumpsum Allocation"]:
-    lumpsum_df = editable_df("Lumpsum Allocation", "lumpsum_df")
+tables["Lumpsum Allocation"] = st.checkbox("Include Lumpsum Allocation Table")
+if tables["Lumpsum Allocation"]:
+    tables["Lumpsum Allocation"] = editable_df("Lumpsum Allocation", "lumpsum_df")
 
-include_tables["SIP Allocation"] = st.checkbox("Include SIP Allocation Table")
-if include_tables["SIP Allocation"]:
-    sip_df = editable_df("SIP Allocation", "sip_df")
+tables["SIP Allocation"] = st.checkbox("Include SIP Allocation Table")
+if tables["SIP Allocation"]:
+    tables["SIP Allocation"] = editable_df("SIP Allocation", "sip_df")
 
-include_tables["Fund Performance"] = st.checkbox("Include Fund Performance Table")
-if include_tables["Fund Performance"]:
-    fund_df = editable_df("Fund Performance", "fund_perf_df")
+tables["Fund Performance"] = st.checkbox("Include Fund Performance Table")
+if tables["Fund Performance"]:
+    tables["Fund Performance"] = editable_perf_table("fund_perf_df")
 
-include_tables["Initial Investment Allocation"] = st.checkbox("Include Initial STP Table")
-if include_tables["Initial Investment Allocation"]:
-    initial_df = editable_df("Initial STP Allocation", "initial_stp_df")
+tables["Initial Investment Allocation"] = st.checkbox("Include Initial STP Table")
+if tables["Initial Investment Allocation"]:
+    tables["Initial Investment Allocation"] = editable_df("Initial Investment Allocation", "initial_stp_df")
 
-include_tables["Final Portfolio Allocation"] = st.checkbox("Include Final STP Table")
-if include_tables["Final Portfolio Allocation"]:
-    final_df = editable_df("Final Portfolio Allocation", "final_stp_df")
+tables["Final Portfolio Allocation"] = st.checkbox("Include Final STP Table")
+if tables["Final Portfolio Allocation"]:
+    tables["Final Portfolio Allocation"] = editable_df("Final Portfolio Allocation", "final_stp_df")
 
-# Factsheets
 st.markdown("### Fund Factsheet Links")
-factsheet_links = st.text_area("Enter links (1. Label | https://url)", height=150)
+factsheet_links = st.text_area("Enter links in format:\nFund Name - Description | https://link.com", height=150)
 
-# PDF Helpers
+# --- PDF Utilities ---
 def dataframe_to_table(df):
     df = df.dropna(how='all')
     data = [list(df.columns)] + df.astype(str).values.tolist()
     table = Table(data, repeatRows=1)
     table.setStyle(TableStyle([
         ('GRID', (0,0), (-1,-1), 0.5, colors.black),
-        ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+        ('BACKGROUND', (0,0), (-1,0), HexColor('#E6F3F8')),
         ('FONTSIZE', (0,0), (-1,-1), 9),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('LEFTPADDING', (0,0), (-1,-1), 4),
@@ -87,99 +100,95 @@ def dataframe_to_table(df):
     ]))
     return table
 
-def main_header_footer(canvas, doc):
+def fund_perf_table(df):
+    df = df.dropna(how='all')
+    cols = ['Scheme Name', 'PE', 'SD', 'SR', 'Beta', 'Alpha', '1Y', '3Y', '5Y', '10Y']
+    df = df[cols]
+    data = [
+        ['', 'Ratios', '', '', '', '', 'Returns', '', '', ''],
+        cols
+    ] + df.astype(str).values.tolist()
+    col_widths = [5.0*cm] + [1.2*cm]*9
+    table = Table(data, colWidths=col_widths, repeatRows=2)
+    table.setStyle(TableStyle([
+        ('SPAN', (1, 0), (5, 0)),
+        ('SPAN', (6, 0), (9, 0)),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('GRID', (0,0), (-1,-1), 0.25, colors.black),
+        ('BACKGROUND', (0,0), (-1,1), HexColor('#E6F3F8')),
+    ]))
+    return table
+
+def add_header_footer(canvas, doc):
     canvas.saveState()
     width, height = A4
     if os.path.exists(LOGO):
-        canvas.drawImage(LOGO, 260, 130, width=80, preserveAspectRatio=True)
+        canvas.drawImage(LOGO, 260, 130, width=80, preserveAspectRatio=True, mask='auto')
     if os.path.exists(FOOTER):
-        canvas.drawImage(FOOTER, 0, 0, width=width, preserveAspectRatio=True)
-    canvas.setFont("Helvetica", 8)
-    canvas.drawCentredString(width / 2.0, 15, f"Page {doc.page}")
-    if doc.page != doc.page_count:  # Avoid on last page
+        canvas.drawImage(FOOTER, 0, 0, width=width, preserveAspectRatio=True, mask='auto')
+    canvas.setFont('Helvetica', 8)
+    canvas.drawCentredString(width / 2.0, 15, str(doc.page))
+    if doc.page < doc.pageCount:  # Hide on disclaimer page
         canvas.drawRightString(width - 30, 15, "Note: Please check the Disclaimer on the last page")
     canvas.restoreState()
 
-def disclaimer_page(canvas, doc):
-    canvas.saveState()
-    width, height = A4
-    if os.path.exists(FOOTER):
-        canvas.drawImage(FOOTER, 0, 0, width=width, preserveAspectRatio=True)
-    canvas.setFont("Helvetica", 8)
-    canvas.drawCentredString(width / 2.0, 15, f"Page {doc.page}")
-    canvas.restoreState()
-
-def build_pdf():
-    buf = BytesIO()
+# --- PDF Generation ---
+def generate_pdf():
+    buffer = BytesIO()
     styles = getSampleStyleSheet()
-    heading_style = styles['Heading1']
-    normal_style = styles['Normal']
-    note_style = ParagraphStyle(name='Note', fontSize=7, textColor=colors.black)
+    heading = ParagraphStyle(name='HeadingLarge', fontSize=20, alignment=1, spaceAfter=20)
+    normal = ParagraphStyle(name='Normal', spaceAfter=6, leading=14)
 
-    elements = [Paragraph("Investment Sheet", heading_style)]
-    elements += [
-        Paragraph(f"<b>Client Name:</b> {client_name}", normal_style),
-        Paragraph(f"<b>Date:</b> {report_date}", normal_style),
-        Paragraph(f"<b>Financial Goal:</b> {financial_goal}", normal_style),
-        Paragraph(f"<b>Investment Horizon:</b> {investment_horizon}", normal_style),
-        Paragraph(f"<b>Risk Profile:</b> {risk_profile}", normal_style),
-        Paragraph(f"<b>Return Expectation:</b> {return_expectation}", normal_style),
-        Paragraph(f"<b>Investment Amount:</b> Rs. {investment_amount}, SIP: Rs. {sip_amount}", normal_style),
-        Spacer(1, 12)
-    ]
+    elements = [Paragraph("Investment Sheet", heading)]
+    elements += [Paragraph(f"<b>{label}:</b> {value}", normal) for label, value in [
+        ("Client Name", client_name),
+        ("Date", report_date),
+        ("Financial Goal", financial_goal),
+        ("Investment Horizon", investment_horizon),
+        ("Risk Profile", risk_profile),
+        ("Return Expectation", return_expectation),
+        ("Investment Amount", f"Rs. {investment_amount} (Lumpsum), Rs. {sip_amount} (SIP)")
+    ]]
 
-    if include_strategy:
-        elements.append(Paragraph("<b>Investment Strategy</b>", styles['Heading3']))
-        for line in strategy_note.splitlines():
-            if line.strip().startswith(("-", "*")):
-                elements.append(Paragraph(f"• {line.strip()[1:].strip()}", normal_style))
-            else:
-                elements.append(Paragraph(line.strip(), normal_style))
-        elements.append(Spacer(1, 12))
+    if include_strategy_note and strategy_note:
+        elements += [Spacer(1, 10), Paragraph("<b>Investment Strategy</b>", styles['Heading4'])]
+        for line in strategy_note.strip().splitlines():
+            elements.append(Paragraph(line.strip(), normal))
 
-    for title in include_tables:
-        if include_tables[title] and not st.session_state[title.lower().replace(" ", "_") + "_df"].empty:
-            df = st.session_state[title.lower().replace(" ", "_") + "_df"]
-            block = [
+    for title, df in tables.items():
+        if isinstance(df, pd.DataFrame) and not df.empty:
+            elements.append(Spacer(1, 10))
+            elements.append(KeepTogether([
                 Paragraph(f"<b>{title}</b>", styles['Heading4']),
-                dataframe_to_table(df)
-            ]
-            if title == "Initial Investment Allocation":
-                block.append(Paragraph("*Initial investment before switching to equity", note_style))
-            if title == "Final Portfolio Allocation":
-                block.append(Paragraph("*Final structure after STP is complete", note_style))
-            elements.append(KeepTogether(block))
-            elements.append(Spacer(1, 12))
+                fund_perf_table(df) if title == "Fund Performance" else dataframe_to_table(df)
+            ]))
 
     if factsheet_links.strip():
-        elements.append(Paragraph("<b>Fund Factsheets</b>", styles['Heading4']))
+        elements.append(Spacer(1, 10))
+        elements.append(Paragraph("<b>Fund Factsheet Links</b>", styles['Heading4']))
         for line in factsheet_links.strip().splitlines():
             if "|" in line:
                 text, url = line.split("|")
-                elements.append(Paragraph(f"{text.strip()}: <a href='{url.strip()}'>{url.strip()}</a>", normal_style))
+                elements.append(Paragraph(f"{text.strip()}: <a href='{url.strip()}'>{url.strip()}</a>", normal))
             else:
-                elements.append(Paragraph(line.strip(), normal_style))
+                elements.append(Paragraph(line.strip(), normal))
 
-    # Disclaimer
-    elements.append(PageBreak())
-    disclaimer_text = """
-Any information provided by Sahayak & their associates does not constitute investment advice...
-Sahayak is a distributor of financial products and NOT an investment advisor and NOT authorized to provide any investment advice by SEBI.
-"""
+    elements.append(Spacer(1, 20))
     elements.append(Paragraph("<b>Disclaimer</b>", styles['Heading3']))
-    for line in disclaimer_text.strip().splitlines():
-        elements.append(Paragraph(line.strip(), normal_style))
+    disclaimer = """Any information provided by Sahayak & their associates does not constitute an investment advice..."""
+    for line in disclaimer.strip().splitlines():
+        elements.append(Paragraph(line.strip(), normal))
 
-    doc = SimpleDocTemplate(buf, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=100, bottomMargin=60)
-    doc.build(elements, onFirstPage=main_header_footer, onLaterPages=main_header_footer)
-    buf.seek(0)
-    return buf
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=80, bottomMargin=60)
+    doc.build(elements, onFirstPage=add_header_footer, onLaterPages=add_header_footer)
+    buffer.seek(0)
+    return buffer
 
-# --- Streamlit Trigger ---
+# --- Trigger Button ---
 if st.button("Generate PDF"):
     if not client_name or not report_date:
-        st.warning("Please fill in required fields!")
+        st.warning("Please fill in Client Name and Date before generating the PDF.")
     else:
-        pdf = build_pdf()
-        st.success("PDF generated successfully!")
-        st.download_button("Download PDF", data=pdf, file_name=f"{client_name}_Investment_Sheet.pdf", mime="application/pdf")
+        pdf = generate_pdf()
+        st.success("✅ PDF generated successfully!")
+        st.download_button("📥 Download PDF", data=pdf, file_name="Investment_Sheet.pdf", mime="application/pdf")
