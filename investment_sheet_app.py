@@ -63,8 +63,8 @@ if 'final_stp_df' not in st.session_state:
 
 def display_editable_table(title, df_key):
     st.subheader(title)
-    edited_df = st.data_editor(st.session_state[df_key], num_rows="dynamic", use_container_width=True, key=df_key)
-    st.session_state[df_key] = edited_df
+    # The widget automatically updates st.session_state[df_key]
+    st.data_editor(st.session_state[df_key], num_rows="dynamic", use_container_width=True, key=df_key)
 
 
 include_lumpsum = st.checkbox("Include Lumpsum Allocation Table")
