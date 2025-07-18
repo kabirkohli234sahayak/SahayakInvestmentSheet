@@ -6,7 +6,7 @@ from reportlab.platypus import Table, TableStyle, SimpleDocTemplate, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.colors import HexColor
 from reportlab.lib.units import cm
-from io import BytesIO, StringIO
+from io import BytesIO
 import os
 from PyPDF2 import PdfMerger
 from reportlab.lib.enums import TA_LEFT
@@ -48,44 +48,45 @@ if include_strategy_note:
 • An amount of Rs 7.00 Lacs will be invested directly into Equity Funds.
 • Balance amount of Rs. 28.00 lacs will be invested into Debt funds, we will start STP (Systematic Transfer Plan) of Rs. 3.50 lacs every fortnight or according to the market opportunities from Debt Funds to Equity Funds till August 2025.""", height=150)
 
-# --- Table Input using Text Areas ---
-def display_csv_input(title, default_csv):
-    st.subheader(title)
-    st.markdown("Paste your data below in CSV format (comma-separated). The first row should be the column headers.")
-    return st.text_area(title, value=default_csv, height=200)
+# --- Table State Management & Generation ---
+if 'lumpsum_df' not in st.session_state:
+    st.session_state.lumpsum_df = pd.DataFrame(columns=["Category", "SubCategory", "Scheme Name", "Allocation (%)", "Amount"])
+if 'sip_df' not in st.session_state:
+    st.session_state.sip_df = pd.DataFrame(columns=["Category", "SubCategory", "Scheme Name", "Allocation (%)", "Amount"])
+    
+if 'fund_perf_df' not in st.session_state:
+    st.session_state.fund_perf_df = pd.DataFrame([{"Scheme Name": "HDFC Mid Cap Fund", "PE": 25.5, "SD": 15.0, "SR": 1.2, "Beta": 0.9, "Alpha": 1.5, "1Y": 12.3, "3Y": 15.6, "5Y": 17.8, "10Y": 19.2}])
+if 'initial_stp_df' not in st.session_state:
+    st.session_state.initial_stp_df = pd.DataFrame(columns=["Category", "SubCategory", "Scheme Name", "Allocation (%)", "Amount"])
+if 'final_stp_df' not in st.session_state:
+    st.session_state.final_stp_df = pd.DataFrame(columns=["Category", "SubCategory", "Scheme Name", "Allocation (%)", "Amount"])
 
-csv_defaults = {
-    'lumpsum': "Category,SubCategory,Scheme Name,Allocation (%),Amount\n",
-    'sip': "Category,SubCategory,Scheme Name,Allocation (%),Amount\n",
-    'fund_perf': "Scheme Name,PE,SD,SR,Beta,Alpha,1Y,3Y,5Y,10Y\nHDFC Mid Cap Fund,25.5,15.0,1.2,0.9,1.5,12.3,15.6,17.8,19.2",
-    'initial_stp': "Category,SubCategory,Scheme Name,Allocation (%),Amount\n",
-    'final_stp': "Category,SubCategory,Scheme Name,Allocation (%),Amount\n"
-}
+def display_editable_table(title, df_key):
+    st.subheader(title)
+    edited_df = st.data_editor(st.session_state[df_key], num_rows="dynamic", use_container_width=True, key=df_key)
+    st.session_state[df_key] = edited_df
+
 
 include_lumpsum = st.checkbox("Include Lumpsum Allocation Table")
-lumpsum_csv = ""
 if include_lumpsum:
-    lumpsum_csv = display_csv_input("Lumpsum Allocation", csv_defaults['lumpsum'])
+    display_editable_table("Lumpsum Allocation", 'lumpsum_df')
 
 include_sip = st.checkbox("Include SIP Allocation Table")
-sip_csv = ""
 if include_sip:
-    sip_csv = display_csv_input("SIP Allocation", csv_defaults['sip'])
+    display_editable_table("SIP Allocation", 'sip_df')
 
 include_fund_perf = st.checkbox("Include Fund Performance Table")
-fund_perf_csv = ""
 if include_fund_perf:
-    fund_perf_csv = display_csv_input("Fund Performance", csv_defaults['fund_perf'])
+    display_editable_table("Fund Performance", 'fund_perf_df')
 
 include_initial_stp = st.checkbox("Include Initial Investment Table (STP Clients Only)")
-initial_stp_csv = ""
 if include_initial_stp:
-    initial_stp_csv = display_csv_input("Initial Investment Allocation", csv_defaults['initial_stp'])
+    display_editable_table("Initial Investment Allocation", 'initial_stp_df')
 
 include_final_stp = st.checkbox("Include Final Portfolio Table (Post STP)")
-final_stp_csv = ""
 if include_final_stp:
-    final_stp_csv = display_csv_input("Final Portfolio Allocation", csv_defaults['final_stp'])
+    display_editable_table("Final Portfolio Allocation", 'final_stp_df')
+
 
 st.markdown("### Fund Factsheet Links")
 factsheet_links = st.text_area("Enter links in the format:\n1. Fund Name - Description | https://link.com", height=150)
@@ -227,26 +228,11 @@ Sahayak Associates is an AMFI Registered Mutual Fund Distributor only.
 
 # --- PDF Generator ---
 def generate_pdf():
-    tables_to_process = {
-        'lumpsum': lumpsum_csv,
-        'sip': sip_csv,
-        'fund_perf': fund_perf_csv,
-        'initial_stp': initial_stp_csv,
-        'final_stp': final_stp_csv
-    }
-
-    processed_tables = {}
-    for key, csv_data in tables_to_process.items():
-        if csv_data.strip():
-            try:
-                df = pd.read_csv(StringIO(csv_data))
-                processed_tables[key] = df
-            except pd.errors.EmptyDataError:
-                continue
-            except Exception as e:
-                st.error(f"Error parsing {key} data: {e}")
-                return None
-
+    lumpsum_df_final = st.session_state.lumpsum_df.copy()
+    sip_df_final = st.session_state.sip_df.copy()
+    initial_stp_df_final = st.session_state.initial_stp_df.copy()
+    final_stp_df_final = st.session_state.final_stp_df.copy()
+    
     try:
         lumpsum_total = float(investment_amount.replace(",", "")) if investment_amount else 0
         sip_total = float(sip_amount.replace(",", "")) if sip_amount else 0
@@ -254,29 +240,21 @@ def generate_pdf():
         lumpsum_total = 0
         sip_total = 0
 
-    if 'lumpsum' in processed_tables and lumpsum_total > 0:
-        df = processed_tables['lumpsum']
-        df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce').fillna(0)
-        df['Allocation (%)'] = (df['Amount'] / lumpsum_total) * 100
-        processed_tables['lumpsum'] = df
+    if lumpsum_total > 0 and not lumpsum_df_final.empty:
+        lumpsum_df_final['Amount'] = pd.to_numeric(lumpsum_df_final['Amount'], errors='coerce').fillna(0)
+        lumpsum_df_final['Allocation (%)'] = (lumpsum_df_final['Amount'] / lumpsum_total) * 100
 
-    if 'sip' in processed_tables and sip_total > 0:
-        df = processed_tables['sip']
-        df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce').fillna(0)
-        df['Allocation (%)'] = (df['Amount'] / sip_total) * 100
-        processed_tables['sip'] = df
+    if sip_total > 0 and not sip_df_final.empty:
+        sip_df_final['Amount'] = pd.to_numeric(sip_df_final['Amount'], errors='coerce').fillna(0)
+        sip_df_final['Allocation (%)'] = (sip_df_final['Amount'] / sip_total) * 100
 
-    if 'initial_stp' in processed_tables and lumpsum_total > 0:
-        df = processed_tables['initial_stp']
-        df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce').fillna(0)
-        df['Allocation (%)'] = (df['Amount'] / lumpsum_total) * 100
-        processed_tables['initial_stp'] = df
+    if lumpsum_total > 0 and not initial_stp_df_final.empty:
+        initial_stp_df_final['Amount'] = pd.to_numeric(initial_stp_df_final['Amount'], errors='coerce').fillna(0)
+        initial_stp_df_final['Allocation (%)'] = (initial_stp_df_final['Amount'] / lumpsum_total) * 100
 
-    if 'final_stp' in processed_tables and lumpsum_total > 0:
-        df = processed_tables['final_stp']
-        df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce').fillna(0)
-        df['Allocation (%)'] = (df['Amount'] / lumpsum_total) * 100
-        processed_tables['final_stp'] = df
+    if lumpsum_total > 0 and not final_stp_df_final.empty:
+        final_stp_df_final['Amount'] = pd.to_numeric(final_stp_df_final['Amount'], errors='coerce').fillna(0)
+        final_stp_df_final['Allocation (%)'] = (final_stp_df_final['Amount'] / lumpsum_total) * 100
 
     main_buffer = BytesIO()
     styles = getSampleStyleSheet()
@@ -302,16 +280,28 @@ def generate_pdf():
             Paragraph(strategy_note, styles['Normal'])
         ]
 
-    if 'lumpsum' in processed_tables:
-        elements += [Spacer(1, 0.5*cm), KeepTogether([Paragraph("<b>Lumpsum Allocation</b>", styles['Heading4']), dataframe_to_table(processed_tables['lumpsum'])])]
-    if 'sip' in processed_tables:
-        elements += [Spacer(1, 0.5*cm), KeepTogether([Paragraph("<b>SIP Allocation</b>", styles['Heading4']), dataframe_to_table(processed_tables['sip'])])]
-    if 'fund_perf' in processed_tables:
-        elements += [Spacer(1, 0.5*cm), KeepTogether([Paragraph("<b>Fund Performance</b>", styles['Heading4']), fund_performance_table(processed_tables['fund_perf'])])]
-    if 'initial_stp' in processed_tables:
-        elements += [Spacer(1, 0.5*cm), KeepTogether([Paragraph("<b>Initial Investment Allocation</b>", styles['Heading4']), dataframe_to_table(processed_tables['initial_stp'])])]
-    if 'final_stp' in processed_tables:
-        elements += [Spacer(1, 0.5*cm), KeepTogether([Paragraph("<b>Final Portfolio Allocation</b>", styles['Heading4']), dataframe_to_table(processed_tables['final_stp'])])]
+    tables = []
+    if include_lumpsum and not lumpsum_df_final.empty:
+        tables.append(("Lumpsum Allocation", lumpsum_df_final))
+    if include_sip and not sip_df_final.empty:
+        tables.append(("SIP Allocation", sip_df_final))
+    if include_fund_perf and not st.session_state.fund_perf_df.empty:
+        tables.append(("Fund Performance", st.session_state.fund_perf_df))
+    if include_initial_stp and not initial_stp_df_final.empty:
+        tables.append(("Initial Investment Allocation", initial_stp_df_final))
+    if include_final_stp and not final_stp_df_final.empty:
+        tables.append(("Final Portfolio Allocation", final_stp_df_final))
+
+    for title, df in tables:
+        elements += [
+            Spacer(1, 0.5*cm),
+            KeepTogether(
+                [
+                    Paragraph(f"<b>{title}</b>", styles['Heading4']),
+                    fund_performance_table(df) if "Fund Performance" in title else dataframe_to_table(df)
+                ]
+            )
+        ]
 
     if factsheet_links:
         elements += [
@@ -350,10 +340,9 @@ if st.button("Generate PDF"):
     else:
         with st.spinner("Generating PDF..."):
             pdf_buffer = generate_pdf()
-            if pdf_buffer:
-                st.download_button(
-                    label="Download PDF",
-                    data=pdf_buffer,
-                    file_name=f"Investment_Sheet - {client_name}.pdf",
-                    mime="application/pdf"
-                )
+            st.download_button(
+                label="Download PDF",
+                data=pdf_buffer,
+                file_name=f"Investment_Sheet - {client_name}.pdf",
+                mime="application/pdf"
+            )
