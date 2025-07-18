@@ -65,10 +65,11 @@ if 'final_stp_df' not in st.session_state:
 def display_editable_table(title, df_key, total_amount_str=None):
     st.subheader(title)
     
-    # Use a unique key for each data editor to prevent ID conflicts
-    edited_df = st.data_editor(st.session_state[df_key], num_rows="dynamic", use_container_width=True, key=f"data_editor_{df_key}")
+    # The st.data_editor widget manages the state for the given key.
+    # The key is the df_key, which ensures the session state variable is updated directly.
+    st.session_state[df_key] = st.data_editor(st.session_state[df_key], num_rows="dynamic", use_container_width=True, key=df_key)
     
-    # Perform calculations on the returned, edited DataFrame
+    # Perform calculations on the session state DataFrame directly
     if total_amount_str is not None:
         try:
             total_investment = float(total_amount_str.replace(",", ""))
@@ -76,13 +77,8 @@ def display_editable_table(title, df_key, total_amount_str=None):
             total_investment = 0
             
         if total_investment > 0:
-            # Create a temporary copy to perform calculations without affecting the main state
-            temp_df = edited_df.copy()
-            temp_df['Amount'] = pd.to_numeric(temp_df['Amount'], errors='coerce').fillna(0)
-            temp_df['Allocation (%)'] = (temp_df['Amount'] / total_investment) * 100
-            
-            # Update the session state variable at the end
-            st.session_state[df_key] = temp_df
+            st.session_state[df_key]['Amount'] = pd.to_numeric(st.session_state[df_key]['Amount'], errors='coerce').fillna(0)
+            st.session_state[df_key]['Allocation (%)'] = (st.session_state[df_key]['Amount'] / total_investment) * 100
 
 include_lumpsum = st.checkbox("Include Lumpsum Allocation Table")
 if include_lumpsum:
@@ -273,93 +269,82 @@ def generate_pdf():
         Paragraph(f"<b>Risk Profile:</b> {risk_profile}", client_style),
         Paragraph(f"<b>Return Expectation:</b> {return_expectation}", client_style),
         Paragraph(f"<b>Investment Amount:</b> Rs. {investment_amount} (Lumpsum), Rs. {sip_amount} (SIP)", client_style),
-        Spacer(1, 10),
     ]
-    
-    bullet_style = ParagraphStyle(name='BulletStyle', parent=styles['Normal'], leftIndent=20, firstLineIndent=-15, spaceBefore=0)
 
-    if include_strategy_note:
-        elements.append(Paragraph("<b>Investment Strategy</b>", styles['Heading3']))
-        strategy_lines = strategy_note.strip().split("• ")
-        for line in strategy_lines:
-            if line:
-                elements.append(Paragraph(f"• {line.strip()}", bullet_style))
-        elements.append(Spacer(1, 10))
+    if include_strategy_note and strategy_note:
+        elements += [
+            Spacer(1, 0.5*cm),
+            Paragraph("<b>Investment Strategy</b>", styles['Heading4']),
+            Paragraph(strategy_note, styles['Normal'])
+        ]
 
     tables = []
-    if include_lumpsum:
+    if include_lumpsum and not st.session_state.lumpsum_df.empty:
         tables.append(("Lumpsum Allocation", st.session_state.lumpsum_df))
-    if include_sip:
+    if include_sip and not st.session_state.sip_df.empty:
         tables.append(("SIP Allocation", st.session_state.sip_df))
-    if include_fund_perf:
+    if include_fund_perf and not st.session_state.fund_perf_df.empty:
         tables.append(("Fund Performance", st.session_state.fund_perf_df))
-    if include_initial_stp:
+    if include_initial_stp and not st.session_state.initial_stp_df.empty:
         tables.append(("Initial Investment Allocation", st.session_state.initial_stp_df))
-    if include_final_stp:
+    if include_final_stp and not st.session_state.final_stp_df.empty:
         tables.append(("Final Portfolio Allocation", st.session_state.final_stp_df))
-        
+
+    # Add tables to the PDF
     for title, df in tables:
-        if not df.empty:
-            table_heading = Paragraph(f"<b>{title}</b>", styles['Heading4'])
-            
-            if title == "Fund Performance":
-                table_content = fund_performance_table(df)
-            else:
-                table_content = dataframe_to_table(df)
-            
-            table_elements = [
-                table_heading,
-                Spacer(1, 10),
-                table_content
-            ]
+        elements += [
+            Spacer(1, 0.5*cm),
+            KeepTogether(
+                [
+                    Paragraph(f"<b>{title}</b>", styles['Heading4']),
+                    fund_performance_table(df) if "Fund Performance" in title else dataframe_to_table(df)
+                ]
+            )
+        ]
 
-            note_text = ""
-            if title == "Initial Investment Allocation":
-                note_text = "*First time transaction to be done for switching purpose from Debt funds to Equity Funds"
-            elif title == "Final Portfolio Allocation":
-                note_text = "*Final Portfolio Illustration after switching the funds from Debt to Equity."
+    # Add factsheet links
+    if factsheet_links:
+        elements += [
+            Spacer(1, 0.5*cm),
+            Paragraph("<b>Fund Factsheet Links</b>", styles['Heading4']),
+        ]
+        for link in factsheet_links.strip().split('\n'):
+            if link:
+                parts = link.split('|')
+                if len(parts) == 2:
+                    text = parts[0].strip()
+                    url = parts[1].strip()
+                    elements.append(Paragraph(f'<link href="{url}">{text}</link>', styles['Normal']))
 
-            if note_text:
-                note_paragraph_style = ParagraphStyle('note_paragraph_style', parent=note_style, leftIndent=0, firstLineIndent=0, spaceBefore=0, leading=10, fontSize=7)
-                note_paragraph = Paragraph(note_text, note_paragraph_style)
-                note_table = Table([[note_paragraph]], colWidths=[table_content._argW[0]])
-                note_table.setStyle(TableStyle([('LEFTPADDING', (0,0), (-1,-1), 0)]))
-                table_elements.append(note_table)
-            
-            elements.append(KeepTogether(table_elements))
-            elements.append(Spacer(1, 10))
-
-    if factsheet_links.strip():
-        elements.append(Paragraph("<b>Fund Factsheets</b>", styles['Heading4']))
-        for line in factsheet_links.strip().splitlines():
-            if "|" in line:
-                label, url = line.split("|")
-                elements.append(Paragraph(f"{label.strip()}: <a href='{url.strip()}'>{url.strip()}</a>", styles['Normal']))
-            else:
-                elements.append(Paragraph(line.strip(), styles['Normal']))
-
-    main_doc = SimpleDocTemplate(main_buffer, pagesize=A4)
+    main_doc = SimpleDocTemplate(main_buffer, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=80, bottomMargin=60)
     main_doc.build(elements, onFirstPage=main_header_footer, onLaterPages=main_header_footer)
-    
-    # Get the page count from the main document to start the new page numbering
-    start_page_num = main_doc.page
+    main_buffer.seek(0)
     
     # Generate the disclaimer PDF
-    disclaimer_buffer = generate_disclaimer_pdf(start_page_num)
+    disclaimer_buffer = generate_disclaimer_pdf(len(main_doc.pages))
     
     # Merge the two PDFs
     merger = PdfMerger()
     merger.append(main_buffer)
     merger.append(disclaimer_buffer)
     
-    final_buffer = BytesIO()
-    merger.write(final_buffer)
+    merged_pdf_buffer = BytesIO()
+    merger.write(merged_pdf_buffer)
     merger.close()
+    merged_pdf_buffer.seek(0)
     
-    final_buffer.seek(0)
-    return final_buffer
+    return merged_pdf_buffer
 
+# --- Download Button ---
 if st.button("Generate PDF"):
-    pdf = generate_pdf()
-    st.success("PDF generated successfully!")
-    st.download_button("Download PDF", data=pdf, file_name="Investment_Sheet.pdf", mime="application/pdf")
+    if not client_name or not report_date:
+        st.warning("Please fill in Client Name and Date before generating the PDF.")
+    else:
+        with st.spinner("Generating PDF..."):
+            pdf_buffer = generate_pdf()
+            st.download_button(
+                label="Download PDF",
+                data=pdf_buffer,
+                file_name=f"Investment_Sheet - {client_name}.pdf",
+                mime="application/pdf"
+            )
