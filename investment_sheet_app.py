@@ -63,7 +63,7 @@ if 'final_stp_df' not in st.session_state:
 
 def display_editable_table(title, df_key, total_amount_str=None):
     st.subheader(title)
-    edited_df = st.data_editor(st.session_state[df_key], num_rows="dynamic", use_container_width=True)
+    edited_df = st.data_editor(st.session_state[df_key], num_rows="dynamic", use_container_width=True, key=df_key)
     st.session_state[df_key] = edited_df
 
     if total_amount_str is not None:
