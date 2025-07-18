@@ -62,38 +62,19 @@ if 'initial_stp_df' not in st.session_state:
 if 'final_stp_df' not in st.session_state:
     st.session_state.final_stp_df = pd.DataFrame(columns=["Category", "SubCategory", "Scheme Name", "Allocation (%)", "Amount"])
 
-def display_editable_table(title, df_key, total_amount_str=None):
+def display_editable_table(title, df_key):
     st.subheader(title)
-    
-    # Get the current DataFrame from session state
-    current_df_in_state = st.session_state[df_key]
-
-    # Recalculate allocation percentage if a total amount is provided
-    if total_amount_str is not None:
-        try:
-            total_investment = float(total_amount_str.replace(",", ""))
-        except (ValueError, AttributeError):
-            total_investment = 0
-            
-        if total_investment > 0 and not current_df_in_state.empty:
-            # Ensure 'Amount' column is numeric for calculation
-            current_df_in_state['Amount'] = pd.to_numeric(current_df_in_state['Amount'], errors='coerce').fillna(0)
-            current_df_in_state['Allocation (%)'] = (current_df_in_state['Amount'] / total_investment) * 100
-            # No need for .copy() here as we are modifying in-place and then passing this object to data_editor
-            # Streamlit's data_editor will then handle the updates to st.session_state[df_key]
-
-    # Now, display the data editor. Streamlit will update st.session_state[df_key]
-    # automatically when the user edits the table.
-    st.data_editor(current_df_in_state, num_rows="dynamic", use_container_width=True, key=df_key)
+    # The data_editor now handles all state updates implicitly
+    st.data_editor(st.session_state[df_key], num_rows="dynamic", use_container_width=True, key=df_key)
 
 
 include_lumpsum = st.checkbox("Include Lumpsum Allocation Table")
 if include_lumpsum:
-    display_editable_table("Lumpsum Allocation", 'lumpsum_df', investment_amount)
+    display_editable_table("Lumpsum Allocation", 'lumpsum_df')
 
 include_sip = st.checkbox("Include SIP Allocation Table")
 if include_sip:
-    display_editable_table("SIP Allocation", 'sip_df', sip_amount)
+    display_editable_table("SIP Allocation", 'sip_df')
 
 include_fund_perf = st.checkbox("Include Fund Performance Table")
 if include_fund_perf:
@@ -101,11 +82,11 @@ if include_fund_perf:
 
 include_initial_stp = st.checkbox("Include Initial Investment Table (STP Clients Only)")
 if include_initial_stp:
-    display_editable_table("Initial Investment Allocation", 'initial_stp_df', investment_amount)
+    display_editable_table("Initial Investment Allocation", 'initial_stp_df')
 
 include_final_stp = st.checkbox("Include Final Portfolio Table (Post STP)")
 if include_final_stp:
-    display_editable_table("Final Portfolio Allocation", 'final_stp_df', investment_amount)
+    display_editable_table("Final Portfolio Allocation", 'final_stp_df')
 
 
 st.markdown("### Fund Factsheet Links")
@@ -260,7 +241,36 @@ Sahayak Associates is an AMFI Registered Mutual Fund Distributor only.
 
 # --- PDF Generator ---
 def generate_pdf():
-    # Generate the main PDF content (without the disclaimer page)
+    # Perform calculations on a temporary copy to avoid state conflicts
+    lumpsum_df_final = st.session_state.lumpsum_df.copy()
+    sip_df_final = st.session_state.sip_df.copy()
+    initial_stp_df_final = st.session_state.initial_stp_df.copy()
+    final_stp_df_final = st.session_state.final_stp_df.copy()
+    
+    try:
+        lumpsum_total = float(investment_amount.replace(",", "")) if investment_amount else 0
+        sip_total = float(sip_amount.replace(",", "")) if sip_amount else 0
+    except (ValueError, AttributeError):
+        lumpsum_total = 0
+        sip_total = 0
+
+    if lumpsum_total > 0 and not lumpsum_df_final.empty:
+        lumpsum_df_final['Amount'] = pd.to_numeric(lumpsum_df_final['Amount'], errors='coerce').fillna(0)
+        lumpsum_df_final['Allocation (%)'] = (lumpsum_df_final['Amount'] / lumpsum_total) * 100
+
+    if sip_total > 0 and not sip_df_final.empty:
+        sip_df_final['Amount'] = pd.to_numeric(sip_df_final['Amount'], errors='coerce').fillna(0)
+        sip_df_final['Allocation (%)'] = (sip_df_final['Amount'] / sip_total) * 100
+
+    if lumpsum_total > 0 and not initial_stp_df_final.empty:
+        initial_stp_df_final['Amount'] = pd.to_numeric(initial_stp_df_final['Amount'], errors='coerce').fillna(0)
+        initial_stp_df_final['Allocation (%)'] = (initial_stp_df_final['Amount'] / lumpsum_total) * 100
+
+    if lumpsum_total > 0 and not final_stp_df_final.empty:
+        final_stp_df_final['Amount'] = pd.to_numeric(final_stp_df_final['Amount'], errors='coerce').fillna(0)
+        final_stp_df_final['Allocation (%)'] = (final_stp_df_final['Amount'] / lumpsum_total) * 100
+
+    # Generate the main PDF content
     main_buffer = BytesIO()
     styles = getSampleStyleSheet()
     heading_style = ParagraphStyle(name='HeadingLarge', fontSize=20, leading=24, alignment=1, spaceAfter=20)
@@ -286,16 +296,16 @@ def generate_pdf():
         ]
 
     tables = []
-    if include_lumpsum and not st.session_state.lumpsum_df.empty:
-        tables.append(("Lumpsum Allocation", st.session_state.lumpsum_df))
-    if include_sip and not st.session_state.sip_df.empty:
-        tables.append(("SIP Allocation", st.session_state.sip_df))
+    if include_lumpsum and not lumpsum_df_final.empty:
+        tables.append(("Lumpsum Allocation", lumpsum_df_final))
+    if include_sip and not sip_df_final.empty:
+        tables.append(("SIP Allocation", sip_df_final))
     if include_fund_perf and not st.session_state.fund_perf_df.empty:
         tables.append(("Fund Performance", st.session_state.fund_perf_df))
-    if include_initial_stp and not st.session_state.initial_stp_df.empty:
-        tables.append(("Initial Investment Allocation", st.session_state.initial_stp_df))
-    if include_final_stp and not st.session_state.final_stp_df.empty:
-        tables.append(("Final Portfolio Allocation", st.session_state.final_stp_df))
+    if include_initial_stp and not initial_stp_df_final.empty:
+        tables.append(("Initial Investment Allocation", initial_stp_df_final))
+    if include_final_stp and not final_stp_df_final.empty:
+        tables.append(("Final Portfolio Allocation", final_stp_df_final))
 
     # Add tables to the PDF
     for title, df in tables:
@@ -321,7 +331,7 @@ def generate_pdf():
                 if len(parts) == 2:
                     text = parts[0].strip()
                     url = parts[1].strip()
-                    elements.append(Paragraph(f'<link href="{url}">{url}</link>', styles['Normal'])) # Changed to display URL
+                    elements.append(Paragraph(f'<link href="{url}">{url}</link>', styles['Normal']))
 
     main_doc = SimpleDocTemplate(main_buffer, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=80, bottomMargin=60)
     main_doc.build(elements, onFirstPage=main_header_footer, onLaterPages=main_header_footer)
