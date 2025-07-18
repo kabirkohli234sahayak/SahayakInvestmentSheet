@@ -52,7 +52,9 @@ if include_strategy_note:
 # --- Tables ---
 def editable_table(title, default_rows, key):
     st.subheader(title)
-    df = pd.DataFrame(default_rows if default_rows else [{"Category": "", "SubCategory": "", "Scheme Name": "", "Allocation (%)": "", "Amount": ""}])
+    df = pd.DataFrame(default_rows if default_rows else [{"Category": "", "SubCategory": "", "Scheme Name": "", "Allocation (%)": 0.0, "Amount": 0.0}])
+    # Explicitly set the column data types to handle numerical values, including decimals.
+    df = df.astype({"Allocation (%)": float, "Amount": float})
     return st.data_editor(df, num_rows="dynamic", use_container_width=True, key=key)
 
 include_lumpsum = st.checkbox("Include Lumpsum Allocation Table")
@@ -67,7 +69,7 @@ include_fund_perf = st.checkbox("Include Fund Performance Table")
 if include_fund_perf:
     st.subheader("Fund Performance")
     fund_perf_data = [{"Scheme Name": "HDFC Mid Cap Fund", "PE": 25.5, "SD": 15.0, "SR": 1.2, "Beta": 0.9, "Alpha": 1.5, "1Y": 12.3, "3Y": 15.6, "5Y": 17.8, "10Y": 19.2}]
-    fund_perf = st.data_editor(pd.DataFrame(fund_perf_data), num_rows="dynamic", use_container_width=True, key="fund_perf")
+    fund_perf = st.data_editor(pd.DataFrame(fund_perf_data).astype({"PE": float, "SD": float, "SR": float, "Beta": float, "Alpha": float, "1Y": float, "3Y": float, "5Y": float, "10Y": float}), num_rows="dynamic", use_container_width=True, key="fund_perf")
 
 include_initial_stp = st.checkbox("Include Initial Investment Table (STP Clients Only)")
 if include_initial_stp:
