@@ -2,17 +2,16 @@ import streamlit as st
 import pandas as pd
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-from reportlab.platypus import Table, TableStyle, SimpleDocTemplate, Paragraph, Spacer, FrameBreak
+from reportlab.platypus import Table, TableStyle, SimpleDocTemplate, Paragraph, Spacer, Frame, KeepTogether
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.colors import HexColor
 from reportlab.lib.units import cm
 from io import BytesIO
 import os
 from PyPDF2 import PdfMerger
-from reportlab.platypus import KeepTogether
 from reportlab.lib.enums import TA_LEFT
 
-# Updated file paths to remove the 'static/' folder prefix
+# File paths for images. Assumes they are in the same directory as the script.
 LOGO = "logo.png"
 FOOTER = "footer.png"
 
@@ -168,15 +167,41 @@ def main_header_footer(canvas, doc):
     canvas.setFont('Helvetica', 9)
     canvas.drawCentredString(width/2.0, 15, page_number_text)
 
-    # Note at the bottom right
+    # Note at the bottom right using Paragraph and Frame for proper wrapping
     note_text = "Note: Please check the Disclaimer on the last page"
-    note_style = ParagraphStyle(name='NoteStyle', fontSize=7, leading=10, alignment=TA_LEFT)
     
-    # Calculate position
-    text_width = canvas.stringWidth(note_text, 'Helvetica', 7)
-    x_pos = width - (text_width + 15)
-    y_pos = 15 
-    canvas.drawString(x_pos, y_pos, note_text)
+    # Define a style for the note
+    note_style = ParagraphStyle(
+        name='NoteStyle',
+        fontSize=7,
+        leading=10,
+        alignment=TA_LEFT
+    )
+    
+    # Create the paragraph object
+    note_paragraph = Paragraph(note_text, note_style)
+    
+    # Calculate the position and size of the frame for the note
+    frame_x = width - 150 # Start 150 points from the right edge
+    frame_y = 15          # Start 15 points from the bottom edge
+    frame_width = 135
+    frame_height = 20
+
+    # Create the frame
+    note_frame = Frame(
+        frame_x,
+        frame_y,
+        frame_width,
+        frame_height,
+        leftPadding=0,
+        bottomPadding=0,
+        rightPadding=0,
+        topPadding=0,
+        id='note_frame'
+    )
+
+    # Render the paragraph inside the frame
+    note_frame.addFromList([note_paragraph], canvas)
 
     canvas.restoreState()
 
