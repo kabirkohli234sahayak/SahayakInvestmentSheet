@@ -204,11 +204,11 @@ def header_footer_with_logos(canvas, doc):
         canvas.drawImage(LOGO, 260, 130, width=80, preserveAspectRatio=True, mask='auto')
     if os.path.exists(FOOTER):
         canvas.drawImage(FOOTER, 0, 0, width=width, preserveAspectRatio=True, mask='auto')
-    
+
     page_number_text = "%d" % doc.page
     canvas.setFont('Helvetica', 9)
     canvas.drawCentredString(width/2.0, 15, page_number_text)
-    
+
     canvas.restoreState()
 
 
