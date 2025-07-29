@@ -201,7 +201,17 @@ def header_footer_with_logos(canvas, doc):
     canvas.saveState()
     width, height = A4
     if os.path.exists(LOGO):
-        canvas.drawImage(LOGO, 260, 130, width=80, preserveAspectRatio=True, mask='auto')
+        logo_width_actual = 80 # Define your desired logo width
+        logo_height_approx = 40 # Approximation, actual height will be proportional
+        
+        # Calculate x-coordinate to center the logo
+        x_centered = (width - logo_width_actual) / 2.0
+        
+        # Calculate y-coordinate to position the logo from the top margin
+        # Adjust '2.5 * cm' to move the logo up or down. A larger value moves it lower.
+        y_top = height - logo_height_approx - 2.5 * cm 
+        
+        canvas.drawImage(LOGO, x_centered, y_top, width=logo_width_actual, preserveAspectRatio=True, mask='auto')
     
     if os.path.exists(FOOTER):
         canvas.drawImage(FOOTER, 0, 0, width=width, preserveAspectRatio=True, mask='auto')
@@ -331,7 +341,6 @@ def generate_pdf():
         for line in factsheet_links.strip().splitlines():
             if "|" in line:
                 label, url = line.split("|", 1)
-                # Corrected: Use 'underline' instead of 'u'
                 elements.append(
                     Paragraph(
                         f"{label.strip()}: <u><link href='{url.strip()}' color='blue' >{url.strip()}</link></u>",
