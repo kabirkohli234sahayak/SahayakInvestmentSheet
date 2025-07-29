@@ -247,7 +247,7 @@ def generate_pdf():
 
     heading_style = ParagraphStyle(name='HeadingLarge', fontSize=20, leading=24, alignment=1, spaceAfter=20)
     client_style = ParagraphStyle(name='ClientDetails', parent=styles['Normal'], spaceAfter=6, leading=14)
-    disclaimer_style = ParagraphStyle(name='DisclaimerStyle', parent=styles['Normal'])
+    disclaimer_style = ParagraphStyle(name='DisclaimerStyle', parent=styles['Normal'], spaceBefore=20)
     note_style = ParagraphStyle(name='NoteStyle', fontSize=7, leading=10)
 
     elements = [Spacer(1, 70), Paragraph("Investment Sheet", heading_style)]
