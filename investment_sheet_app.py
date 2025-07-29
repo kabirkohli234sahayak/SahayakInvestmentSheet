@@ -203,7 +203,7 @@ def header_footer_with_logos(canvas, doc):
     if os.path.exists(LOGO):
         logo_width_actual = 80
         logo_height_approx = 40
-        canvas.drawImage(LOGO, width - logo_width_actual = 1.5 * cm, height - logo_height_approx = 1.5 * cm, width=logo_width_actual, preserveAspectRatio=True, mask='auto')
+        canvas.drawImage(LOGO, width = 1.5 * cm, height = 1.5 * cm, preserveAspectRatio=True, mask='auto')
     
     if os.path.exists(FOOTER):
         canvas.drawImage(FOOTER, 0, 0, width=width, preserveAspectRatio=True, mask='auto')
