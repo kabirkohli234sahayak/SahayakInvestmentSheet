@@ -70,7 +70,7 @@ if include_sip:
 include_fund_perf = st.checkbox("Include Fund Performance Table")
 if include_fund_perf:
     st.subheader("Fund Performance")
-    fund_perf_data = [{"Scheme Name": "HDFC Mid Cap Fund with a very long name that should wrap for better readability", "PE": 25.50, "SD": 15.00, "SR": 1.20, "Beta": 0.90, "Alpha": 1.50, "1Y": 12.30, "3Y": 15.60, "5Y": 17.80, "10Y": 19.20}]
+    fund_perf_data = [{"Scheme Name": "HDFC Mid Cap Fund ", "PE": 25.50, "SD": 15.00, "SR": 1.20, "Beta": 0.90, "Alpha": 1.50, "1Y": 12.30, "3Y": 15.60, "5Y": 17.80, "10Y": 19.20}]
     fund_perf = st.data_editor(pd.DataFrame(fund_perf_data).astype({col: float for col in fund_perf_data[0] if col != 'Scheme Name'}), num_rows="dynamic", use_container_width=True, key="fund_perf")
 
 include_initial_stp = st.checkbox("Include Initial Investment Table (STP Clients Only)")
