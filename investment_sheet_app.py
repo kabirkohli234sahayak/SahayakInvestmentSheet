@@ -209,7 +209,7 @@ def header_footer_with_logos(canvas, doc):
         
         # Calculate y-coordinate to position the logo from the top margin
         # Adjust '2.5 * cm' to move the logo up or down. A larger value moves it lower.
-        y_top = height - logo_height_approx - (2.5 * cm) 
+        y_top = height - (2.5 * cm) 
         
         canvas.drawImage(LOGO, x_centered, y_top, width=logo_width_actual, preserveAspectRatio=True, mask='auto')
     
