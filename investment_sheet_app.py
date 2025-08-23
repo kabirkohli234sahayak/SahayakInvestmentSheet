@@ -11,7 +11,7 @@ import os
 from PyPDF2 import PdfMerger 
 from reportlab.platypus import KeepTogether
 from reportlab.lib.enums import TA_LEFT
-from datetime import datetim
+from datetime import datetime
 
 # Static assets
 LOGO = "logo.png"
@@ -839,3 +839,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
