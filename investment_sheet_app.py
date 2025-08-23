@@ -316,12 +316,16 @@ def show_main_screen():
         if st.button("📝 Minutes of Meeting", use_container_width=True, type="primary"):
             st.session_state.app_mode = "mom"
             st.rerun()
-            
-        if st.button("✅ Meeting Checklist", use_container_width=True, disabled=True):
-            st.info("Coming Soon!")
+
+        # NEW CODE - ENABLED
+        if st.button("✅ Meeting Checklist", use_container_width=True, type="primary"):
+            st.session_state.app_mode = "checklist"
+            st.rerun()
+
     
     st.markdown("---")
-    st.markdown("**Note:** Meeting Checklist generator is currently under development.")
+    st.markdown("**Note:** All document generators are now available!")
+
 
 # --- Investment Sheet Generator ---
 def show_investment_sheet():
@@ -1744,6 +1748,287 @@ def show_financial_goal_planner():
                     else:
                         st.error("❌ Failed to generate PDF. Please try again.")
 
+# --- Meeting Checklist Generator ---
+def show_meeting_checklist():
+    if st.button("← Back to Main Menu", key="back_checklist"):
+        st.session_state.app_mode = None
+        st.rerun()
+    
+    st.title("✅ Pre-Meeting Checklist Generator")
+    st.markdown("Select the points you want to include in your customized checklist, then download the PDF for printing.")
+    
+    # Default checklist items with your provided list
+    default_checklist_items = [
+        "Non NJ Portfolio Review",
+        "Change in Financial Goals- Time & Amount",
+        "Requirement of Funds in next 1,3,5 Years",
+        "Any additional goals",
+        "Performance against goals (tracker)",
+        "Review of Asset Allocation- Current vs Proposed vs Original",
+        "Review of Category Allocation- Current vs Proposed vs Original",
+        "Changes Proposed",
+        "Reason for change",
+        "SIP Review",
+        "Investment Plan",
+        "Additional Family Account Opening",
+        "Reference",
+        "Insurance Review - Term/ Health / General",
+        "Will Writing / Estate Planning",
+        "Testimonial/ Wallet share",
+        "Risk profile",
+        "Money belief",
+        "Collection of docs",
+        "Anniversary",
+        "Need an iPad",
+        "Taking gifts along",
+        "Carry all necessary forms",
+        "Taking valuation report, SIP, Portfolio review report of existing portfolio",
+        "Brochures & file ready"
+    ]
+    
+    # Client and meeting information
+    st.header("📝 Meeting Information")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        client_name_checklist = st.text_input("Client Name", placeholder="Enter client name")
+        meeting_date_checklist = st.text_input("Meeting Date", placeholder="DD-MM-YYYY")
+        
+    with col2:
+        meeting_time_checklist = st.text_input("Meeting Time", placeholder="HH:MM AM/PM")
+        meeting_location_checklist = st.text_input("Meeting Location", placeholder="Enter location")
+    
+    st.markdown("---")
+    
+    # Initialize session state for selected items
+    if 'selected_default_items' not in st.session_state:
+        st.session_state.selected_default_items = []
+    
+    # Pre-defined checklist selection
+    st.header("📋 Select Checklist Items")
+    st.markdown("### Default Checklist Points:")
+    
+    # Quick select buttons
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("Select All", use_container_width=True):
+            st.session_state.selected_default_items = default_checklist_items.copy()
+            st.rerun()
+    
+    with col2:
+        if st.button("Clear All", use_container_width=True):
+            st.session_state.selected_default_items = []
+            st.rerun()
+    
+    with col3:
+        if st.button("Select Top 10", use_container_width=True):
+            st.session_state.selected_default_items = default_checklist_items[:10].copy()
+            st.rerun()
+    
+    # Display checkboxes with multiselect
+    selected_default = st.multiselect(
+        "Choose from pre-defined checklist items:",
+        options=default_checklist_items,
+        default=st.session_state.selected_default_items,
+        key="default_multiselect"
+    )
+    
+    st.session_state.selected_default_items = selected_default
+    
+    st.markdown("---")
+    
+    # Custom checklist points
+    st.header("➕ Add Your Custom Points")
+    st.markdown("Add your own checklist points specific to this meeting:")
+    
+    # Initialize session state for custom items
+    if 'custom_checklist_items' not in st.session_state:
+        st.session_state.custom_checklist_items = []
+    
+    # Input for new custom item
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        new_custom_item = st.text_input("Enter custom checklist point:", placeholder="Type your custom point here")
+    
+    with col2:
+        st.write("")  # Empty space for alignment
+        if st.button("Add Point", use_container_width=True):
+            if new_custom_item.strip():
+                st.session_state.custom_checklist_items.append(new_custom_item.strip())
+                st.success(f"Added: {new_custom_item}")
+                st.rerun()
+            else:
+                st.error("Please enter a valid checklist point.")
+    
+    # Display custom items with delete option
+    if st.session_state.custom_checklist_items:
+        st.markdown("### Your Custom Points:")
+        
+        selected_custom = st.multiselect(
+            "Select custom points to include:",
+            options=st.session_state.custom_checklist_items,
+            default=st.session_state.custom_checklist_items,
+            key="custom_multiselect"
+        )
+        
+        # Option to delete custom items
+        if st.button("Clear All Custom Points", type="secondary"):
+            st.session_state.custom_checklist_items = []
+            st.success("All custom points cleared!")
+            st.rerun()
+    else:
+        selected_custom = []
+    
+    # Combine all selected items
+    all_selected_items = selected_default + selected_custom
+    
+    st.markdown("---")
+    
+    # Summary and generate PDF
+    st.header("📄 Generate Checklist")
+    
+    total_selected = len(all_selected_items)
+    st.info(f"**Selected Items:** {total_selected}")
+    
+    if total_selected > 0:
+        st.markdown("**Preview of selected items:**")
+        for i, item in enumerate(all_selected_items, 1):
+            st.markdown(f"{i}. {item}")
+    
+       # PDF Generation function for checklist (ENHANCED VERSION)
+    def generate_meeting_checklist_pdf():
+        buffer = BytesIO()
+        styles = getSampleStyleSheet()
+        
+        # Enhanced professional styles
+        title_style = ParagraphStyle(
+            name='Title', 
+            fontSize=20, 
+            leading=24, 
+            alignment=1, 
+            spaceAfter=25, 
+            fontName='Helvetica-Bold',
+            textColor=colors.black
+        )
+        
+        client_style = ParagraphStyle(
+            name='Client', 
+            parent=styles['Normal'], 
+            fontSize=12, 
+            leading=16, 
+            spaceAfter=10, 
+            fontName='Helvetica',
+            textColor=colors.black
+        )
+        
+        heading_style = ParagraphStyle(
+            name='Heading', 
+            fontSize=16, 
+            leading=20, 
+            spaceAfter=15, 
+            spaceBefore=20,
+            fontName='Helvetica-Bold',
+            textColor=colors.black
+        )
+        
+        checklist_style = ParagraphStyle(
+            name='Checklist', 
+            parent=styles['Normal'], 
+            fontSize=12, 
+            leading=18,  # Increased line spacing
+            leftIndent=15, 
+            spaceAfter=12,  # More space between items
+            fontName='Helvetica',
+            textColor=colors.black
+        )
+        
+        elements = []
+        
+        # Header with more space
+        elements.append(Paragraph("PRE-MEETING CHECKLIST", title_style))
+        elements.append(Spacer(1, 30))
+        
+        # Meeting details with better formatting
+        elements.append(Paragraph("Meeting Information", heading_style))
+        elements.append(Paragraph(f"<b>Client Name:</b> {client_name_checklist or '_' * 30}", client_style))
+        elements.append(Paragraph(f"<b>Meeting Date:</b> {meeting_date_checklist or '_' * 20}", client_style))
+        elements.append(Paragraph(f"<b>Meeting Time:</b> {meeting_time_checklist or '_' * 20}", client_style))
+        elements.append(Paragraph(f"<b>Location:</b> {meeting_location_checklist or '_' * 30}", client_style))
+        elements.append(Spacer(1, 25))
+        
+        # Checklist items with better spacing
+        elements.append(Paragraph("Checklist Items", heading_style))
+        elements.append(Spacer(1, 15))
+        
+        for item in all_selected_items:
+            # REMOVED numbers, just checkbox and item
+            checkbox_text = f"• {item}"
+            elements.append(Paragraph(checkbox_text, checklist_style))
+        
+        # Add page break before Additional Notes
+        elements.append(PageBreak())
+        
+        # Additional Notes section (FIXED VERSION)
+        elements.append(Spacer(1, 30))  # Space from top
+        elements.append(Paragraph("Additional Notes:", heading_style))
+        elements.append(Spacer(1, 20))
+        
+        # Create proper note lines (FIXED)
+        note_style = ParagraphStyle(
+            name='Notes', 
+            parent=styles['Normal'], 
+            fontSize=12, 
+            leading=20,  # Reduced line height
+            fontName='Helvetica',
+            textColor=colors.black
+        )
+        
+        # FIXED: Create continuous lines that fit on one page
+        for _ in range(8):
+            elements.append(Paragraph("_" * 80, styles['Normal']))
+            elements.append(Spacer(1, 12))
+
+        # Build PDF with increased margins for better spacing
+        doc = SimpleDocTemplate(buffer, pagesize=A4, 
+                               rightMargin=2.5*cm,   # Increased margins
+                               leftMargin=2.5*cm, 
+                               topMargin=6*cm,       # More space from header
+                               bottomMargin=4*cm)    # More space from footer
+        doc.build(elements, onFirstPage=header_footer_with_logos, onLaterPages=header_footer_with_logos)
+        
+        buffer.seek(0)
+        return buffer
+
+    
+    # Generate PDF button
+    st.markdown("---")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("📄 Generate Checklist PDF", type="primary", use_container_width=True):
+            if total_selected == 0:
+                st.error("❌ Please select at least one checklist item!")
+            else:
+                with st.spinner("Generating your pre-meeting checklist..."):
+                    pdf = generate_meeting_checklist_pdf()
+                    st.success("✅ Pre-Meeting Checklist generated successfully!")
+                    
+                    # Create filename based on client name and date
+                    filename = "Pre_Meeting_Checklist"
+                    if client_name_checklist.strip():
+                        filename += f"_{client_name_checklist.replace(' ', '_')}"
+                    if meeting_date_checklist.strip():
+                        filename += f"_{meeting_date_checklist.replace('/', '_')}"
+                    filename += ".pdf"
+                    
+                    st.download_button(
+                        "📥 Download Pre-Meeting Checklist",
+                        data=pdf,
+                        file_name=filename,
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+
+
 # --- Main App Logic ---
 def main():
     if st.session_state.app_mode is None:
@@ -1754,10 +2039,8 @@ def main():
         show_mom()
     elif st.session_state.app_mode == "goal_planner":
         show_financial_goal_planner()
+    elif st.session_state.app_mode == "checklist":  
+        show_meeting_checklist()
 
 if __name__ == "__main__":
     main()
-
-
-
-
