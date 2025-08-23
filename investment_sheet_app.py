@@ -16,8 +16,8 @@ from reportlab.lib.enums import TA_LEFT
 from datetime import datetime
 
 # Static assets
-LOGO = "D:/Sahayak essentials/Investment Sheet/static/logo.png"
-FOOTER = "D:/Sahayak essentials/Investment Sheet/static/footer.png"
+LOGO = "logo.png"
+FOOTER = "footer.png"
 
 st.set_page_config(page_title="PDF Document Generator", layout="centered")
 
@@ -1757,6 +1757,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
