@@ -2,10 +2,12 @@ import streamlit as st
 import pandas as pd
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-from reportlab.platypus import Table, TableStyle, SimpleDocTemplate, Paragraph, Spacer, FrameBreak, PageBreak
+from reportlab.platypus import Table, TableStyle, SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.colors import HexColor
 from reportlab.lib.units import cm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from io import BytesIO
 import os
 from PyPDF2 import PdfMerger 
@@ -14,14 +16,23 @@ from reportlab.lib.enums import TA_LEFT
 from datetime import datetime
 
 # Static assets
-LOGO = "logo.png"
-FOOTER = "footer.png"
+LOGO = "D:/Sahayak essentials/Investment Sheet/static/logo.png"
+FOOTER = "D:/Sahayak essentials/Investment Sheet/static/footer.png"
 
 st.set_page_config(page_title="PDF Document Generator", layout="centered")
 
 # Initialize session state
 if 'app_mode' not in st.session_state:
     st.session_state.app_mode = None
+
+# Register Unicode font for proper character display
+try:
+    # Try to register a Unicode font (place NotoSans-Regular.ttf in your project directory)
+    pdfmetrics.registerFont(TTFont('NotoSans', 'NotoSans-Regular.ttf'))
+    UNICODE_FONT = 'NotoSans'
+except:
+    # Fallback to Helvetica if Unicode font not available
+    UNICODE_FONT = 'Helvetica'
 
 # Common disclaimer text
 DISCLAIMER_TEXT = """Any information provided by Sahayak & their associates does not constitute an investment advice, offer, invitation & inducement to invest in securities or other investments and Sahayak is not soliciting any action based on it. 
@@ -37,44 +48,131 @@ Sahayak makes no warranties with regard to such information or results obtained 
 Sahayak is a distributor of financial products and NOT an investment advisor and NOT Authorized to provide any investment advice by SEBI. 
 Sahayak Associates is an AMFI Registered Mutual Fund Distributor only."""
 
+# --- Indian Number Formatting Function ---
+def format_indian_number(amount):
+    """Convert number to Indian comma format (1,00,000.00) with 2 decimal places"""
+    try:
+        num = float(amount)
+    except:
+        return "0.00"
+    
+    # Format with 2 decimal places
+    formatted = f"{abs(num):.2f}"
+    
+    # Split integer and decimal parts
+    if '.' in formatted:
+        integer_part, decimal_part = formatted.split('.')
+    else:
+        integer_part, decimal_part = formatted, "00"
+    
+    # Apply Indian comma formatting to integer part
+    if len(integer_part) <= 3:
+        formatted_integer = integer_part
+    else:
+        # Take the last 3 digits
+        last_three = integer_part[-3:]
+        remaining = integer_part[:-3]
+        
+        # Add commas every 2 digits for the remaining part (from right)
+        formatted_remaining = ""
+        while len(remaining) > 2:
+            formatted_remaining = "," + remaining[-2:] + formatted_remaining
+            remaining = remaining[:-2]
+        
+        if remaining:
+            formatted_remaining = remaining + formatted_remaining
+        
+        formatted_integer = formatted_remaining + "," + last_three
+    
+    # Combine integer and decimal parts
+    result = formatted_integer + "." + decimal_part
+    
+    # Add negative sign if needed
+    if num < 0:
+        result = "-" + result
+    
+    return result
+
+# --- Financial Goal Planner Helper Functions ---
+def calculate_future_value(present_value, inflation_rate, years):
+    """Calculate future value with inflation"""
+    return present_value * ((1 + inflation_rate/100) ** years)
+
+def calculate_sip_amount(future_value, years, expected_return, existing_assets=0):
+    """Calculate required SIP amount"""
+    deficit = future_value - existing_assets
+    if deficit <= 0:
+        return 0
+    
+    monthly_rate = expected_return / 100 / 12
+    months = years * 12
+    
+    if monthly_rate == 0:
+        return deficit / months
+    
+    sip_amount = deficit * monthly_rate / (((1 + monthly_rate) ** months) - 1)
+    return sip_amount
+
+def calculate_lumpsum_amount(future_value, years, expected_return, existing_assets=0):
+    """Calculate required lumpsum amount"""
+    deficit = future_value - existing_assets
+    if deficit <= 0:
+        return 0
+    
+    annual_rate = expected_return / 100
+    lumpsum = deficit / ((1 + annual_rate) ** years)
+    return lumpsum
+
+def calculate_stepup_sip(base_sip, stepup_rate=10):
+    """Calculate step-up SIP amount"""
+    return base_sip * (1 - stepup_rate/100)
+
+def calculate_retirement_corpus(monthly_expenses, retirement_years, inflation_rate, tax_rate, investment_return):
+    """Calculate corpus needed for retirement expenses"""
+    annual_expenses = monthly_expenses * 12
+    real_return = ((1 + investment_return/100) / (1 + inflation_rate/100)) - 1
+    real_return_tax_adjusted = real_return * (1 - tax_rate/100)
+    
+    if real_return_tax_adjusted <= 0:
+        return annual_expenses * retirement_years
+    
+    corpus = annual_expenses * (1 - (1 + real_return_tax_adjusted)**(-retirement_years)) / real_return_tax_adjusted
+    return corpus
+
 # --- Common PDF Helper Functions ---
 def header_footer_with_logos(canvas, doc):
     canvas.saveState()
-    width, height = A4  # A4 size is approximately 595 x 842 points
+    width, height = A4
     
     # Logo at top - PROPERLY CENTERED
     if os.path.exists(LOGO):
         try:
-            logo_width = 250  # Your actual logo width
-            logo_height = 150  # Your actual logo height
-            logo_x = (width - logo_width) / 2  # Center horizontally: (595 - 250) / 2 = 172.5
-            logo_y = height - 160  # Position from top
+            logo_width = 250
+            logo_height = 150
+            logo_x = (width - logo_width) / 2
+            logo_y = height - 160
             
             canvas.drawImage(LOGO, logo_x, logo_y, width=logo_width, height=logo_height, preserveAspectRatio=True, mask='auto')
         except Exception as e:
-            # Fallback text header if logo fails
             canvas.setFont('Helvetica-Bold', 14)
             canvas.drawCentredString(width/2.0, height-50, "SAHAYAK ASSOCIATES")
     else:
-        # Fallback text header if logo doesn't exist
         canvas.setFont('Helvetica-Bold', 14)
         canvas.drawCentredString(width/2.0, height-50, "SAHAYAK ASSOCIATES")
     
-    # Footer at bottom - CORRECTED positioning
+    # Footer at bottom
     if os.path.exists(FOOTER):
         try:
             footer_height = 80
             canvas.drawImage(FOOTER, 0, 0, width=width, height=footer_height, preserveAspectRatio=True, mask='auto')
         except Exception as e:
-            # Fallback text footer if footer fails
             canvas.setFont('Helvetica', 9)
             canvas.drawCentredString(width/2.0, 30, "Contact: 91-9872804694 | www.sahayakassociates.com")
     else:
-        # Fallback text footer if footer doesn't exist
         canvas.setFont('Helvetica', 9)
         canvas.drawCentredString(width/2.0, 30, "Contact: 91-9872804694 | www.sahayakassociates.com")
         
-    # Page number positioned above footer
+    # Page number
     page_number_text = "Page %d" % doc.page
     canvas.setFont('Helvetica', 9)
     canvas.drawCentredString(width/2.0, 90, page_number_text)
@@ -85,10 +183,10 @@ def dataframe_to_table(df):
     df = df.fillna('-')
     for col in df.columns:
         if df[col].dtype == float:
-            df[col] = df[col].apply(lambda x: f"{x:.2f}" if pd.notna(x) and x != '-' else '-')
+            df[col] = df[col].apply(lambda x: format_indian_number(x) if pd.notna(x) and x != '-' else '-')
 
     styles = getSampleStyleSheet()
-    cell_style = ParagraphStyle(name='TableCell', parent=styles['Normal'], fontSize=9, leading=10, wordWrap='CJK')
+    cell_style = ParagraphStyle(name='TableCell', parent=styles['Normal'], fontSize=9, leading=10, wordWrap='CJK', fontName=UNICODE_FONT)
 
     header_data = [Paragraph(col_name, cell_style) for col_name in df.columns]
     
@@ -96,7 +194,11 @@ def dataframe_to_table(df):
     for index, row in df.iterrows():
         row_data = []
         for item in row:
-            row_data.append(Paragraph(str(item), cell_style))
+            if 'Amount' in str(item) or (isinstance(item, (int, float)) and item > 999):
+                formatted_item = format_indian_number(item)
+                row_data.append(Paragraph(f"Rs.{formatted_item}", cell_style))
+            else:
+                row_data.append(Paragraph(str(item), cell_style))
         table_data.append(row_data)
 
     data = [header_data] + table_data
@@ -128,7 +230,7 @@ def fund_performance_table(df):
     df_display = df.reindex(columns=final_display_columns)
 
     styles = getSampleStyleSheet()
-    cell_style = ParagraphStyle(name='FundPerfCell', parent=styles['Normal'], fontSize=9, leading=10, wordWrap='CJK')
+    cell_style = ParagraphStyle(name='FundPerfCell', parent=styles['Normal'], fontSize=9, leading=10, wordWrap='CJK', fontName=UNICODE_FONT)
     
     header_row1_elements = []
     header_row2_elements = []
@@ -206,8 +308,9 @@ def show_main_screen():
             st.session_state.app_mode = "investment"
             st.rerun()
             
-        if st.button("🎯 Financial Goal", use_container_width=True, disabled=True):
-            st.info("Coming Soon!")
+        if st.button("🎯 Financial Goal Planner", use_container_width=True, type="primary"):
+            st.session_state.app_mode = "goal_planner"
+            st.rerun()
     
     with col2:
         if st.button("📝 Minutes of Meeting", use_container_width=True, type="primary"):
@@ -218,7 +321,7 @@ def show_main_screen():
             st.info("Coming Soon!")
     
     st.markdown("---")
-    st.markdown("**Note:** Financial Goal and Meeting Checklist generators are currently under development.")
+    st.markdown("**Note:** Meeting Checklist generator is currently under development.")
 
 # --- Investment Sheet Generator ---
 def show_investment_sheet():
@@ -307,7 +410,8 @@ This is an important point to note.
             name='LinkContainer',
             parent=styles['Normal'],
             fontSize=10,
-            spaceAfter=5
+            spaceAfter=5,
+            fontName=UNICODE_FONT
         )
 
         bullet_style = ParagraphStyle(
@@ -318,12 +422,13 @@ This is an important point to note.
             spaceBefore=0,
             leading=14,
             fontSize=10,
-            alignment=TA_LEFT
+            alignment=TA_LEFT,
+            fontName=UNICODE_FONT
         )
 
-        heading_style = ParagraphStyle(name='HeadingLarge', fontSize=20, leading=24, alignment=1, spaceAfter=20)
-        client_style = ParagraphStyle(name='ClientDetails', parent=styles['Normal'], spaceAfter=6, leading=14)
-        note_style = ParagraphStyle(name='NoteStyle', fontSize=7, leading=10)
+        heading_style = ParagraphStyle(name='HeadingLarge', fontSize=20, leading=24, alignment=1, spaceAfter=20, fontName=UNICODE_FONT)
+        client_style = ParagraphStyle(name='ClientDetails', parent=styles['Normal'], spaceAfter=6, leading=14, fontName=UNICODE_FONT)
+        note_style = ParagraphStyle(name='NoteStyle', fontSize=7, leading=10, fontName=UNICODE_FONT)
 
         elements = [Paragraph("Investment Sheet", heading_style)]
         
@@ -338,9 +443,20 @@ This is an important point to note.
 
         investment_summary_parts = []
         if investment_amount.strip():
-            investment_summary_parts.append(f"Rs. {investment_amount} (Lumpsum)")
+            try:
+                amount_num = float(investment_amount.replace(',', '').replace('Rs.', '').replace('Rs.', '').strip())
+                formatted_amount = format_indian_number(amount_num)
+                investment_summary_parts.append(f"Rs.{formatted_amount} (Lumpsum)")
+            except:
+                investment_summary_parts.append(f"Rs.{investment_amount} (Lumpsum)")
+                
         if sip_amount.strip():
-            investment_summary_parts.append(f"Rs. {sip_amount} (SIP)")
+            try:
+                sip_num = float(sip_amount.replace(',', '').replace('Rs.', '').replace('Rs.', '').strip())
+                formatted_sip = format_indian_number(sip_num)
+                investment_summary_parts.append(f"Rs.{formatted_sip} (SIP)")
+            except:
+                investment_summary_parts.append(f"Rs.{sip_amount} (SIP)")
 
         if investment_summary_parts:
             elements.append(Paragraph(f"<b>Investment Amount:</b> {', '.join(investment_summary_parts)}", client_style))
@@ -414,30 +530,28 @@ This is an important point to note.
                 else:
                     elements.append(Paragraph(line.strip(), styles['Normal']))
 
-        elements.append(PageBreak())  # Force new page for disclaimer
+        elements.append(PageBreak())
         
-        # CENTERED DISCLAIMER HEADING
         disclaimer_heading_style = ParagraphStyle(
             name='DisclaimerHeading', 
             fontSize=16, 
             leading=24, 
-            alignment=1,  # Center alignment
+            alignment=1,
             spaceAfter=25, 
             fontName='Helvetica-Bold'
         )
         
-        elements.append(Spacer(1, 30))  # Extra space at top of page
+        elements.append(Spacer(1, 30))
         elements.append(Paragraph("DISCLAIMER", disclaimer_heading_style))
         
-        # Disclaimer content
         disclaimer_style = ParagraphStyle(
             name='DisclaimerStyle', 
             parent=styles['Normal'], 
             fontSize=9, 
             leading=11,
+            fontName=UNICODE_FONT
         )
         
-        # Split disclaimer into paragraphs for better formatting
         disclaimer_paragraphs = [p.strip() for p in DISCLAIMER_TEXT.split('.') if p.strip()]
         for paragraph in disclaimer_paragraphs:
             if paragraph:
@@ -547,12 +661,11 @@ def show_mom():
                                       height=100, 
                                       key="mom_factsheets")
     
-    # --- IMPROVED PDF Generator for MoM ---
+    # --- PDF Generator for MoM ---
     def generate_mom_pdf():
         buffer = BytesIO()
         styles = getSampleStyleSheet()
         
-        # Enhanced Custom styles with better typography
         heading_style = ParagraphStyle(
             name='MoMHeading', 
             fontSize=18, 
@@ -567,7 +680,7 @@ def show_mom():
             parent=styles['Normal'], 
             fontSize=10, 
             leading=14,
-            fontName='Helvetica'
+            fontName=UNICODE_FONT
         )
         
         section_heading_style = ParagraphStyle(
@@ -584,28 +697,25 @@ def show_mom():
             parent=styles['Normal'], 
             fontSize=10, 
             leading=14,
-            fontName='Helvetica'
+            fontName=UNICODE_FONT
         )
         
-        # CENTERED PROFILE STYLE
         centered_profile_style = ParagraphStyle(
             name='CenteredProfile',
             parent=styles['Normal'],
             fontSize=11,
             leading=16,
-            alignment=1,  # Center alignment
+            alignment=1,
             spaceAfter=20,
             spaceBefore=10,
-            fontName='Helvetica'
+            fontName=UNICODE_FONT
         )
         
         elements = []
         
-        # Title
         elements.append(Paragraph("Minutes of Meeting", heading_style))
         elements.append(Spacer(1, 15))
         
-        # Meeting Info Table with blue headers
         meeting_info_data = [
             [Paragraph("<b>Meeting Title</b>", info_table_style), Paragraph(f"<b>Portfolio Review of {client_name_mom}</b>", info_table_style)],
             [Paragraph("<b>Meeting Organizer</b>", info_table_style), Paragraph(f"<b>{meeting_organizer}</b>", info_table_style)],
@@ -622,17 +732,15 @@ def show_mom():
             ('RIGHTPADDING', (0,0), (-1,-1), 10),
             ('TOPPADDING', (0,0), (-1,-1), 10),
             ('BOTTOMPADDING', (0,0), (-1,-1), 10),
-            ('BACKGROUND', (0,0), (0,-1), HexColor('#E6F3F8')),  # Blue background for headers
+            ('BACKGROUND', (0,0), (0,-1), HexColor('#E6F3F8')),
         ]))
         
         elements.append(meeting_info_table)
         elements.append(Spacer(1, 20))
         
-        # CENTERED Investment Profile
         profile_text = f"<b>Investment Horizon:</b> {investment_horizon_mom} &nbsp;&nbsp;&nbsp;&nbsp; <b>Risk Profile:</b> {risk_profile_mom}<br/><br/><b>Return Expectation:</b> {return_expectation_mom} &nbsp;&nbsp;&nbsp;&nbsp; <b>Awareness level:</b> {awareness_level}"
         elements.append(Paragraph(profile_text, centered_profile_style))
         
-        # Brief Description/Agenda
         elements.append(Paragraph("<b>Brief Description/Agenda</b>", section_heading_style))
         
         agenda_table_data = [[Paragraph(agenda_items.replace('\n', '<br/>'), normal_style)]]
@@ -648,7 +756,6 @@ def show_mom():
         elements.append(agenda_table)
         elements.append(Spacer(1, 20))
         
-        # Review of Asset Allocation
         elements.append(Paragraph("<b>A. Review of Asset Allocation</b>", section_heading_style))
         
         asset_alloc_data = [
@@ -660,25 +767,22 @@ def show_mom():
         asset_alloc_table = Table(asset_alloc_data, colWidths=[4*cm, 4*cm, 4*cm, 4*cm])
         asset_alloc_table.setStyle(TableStyle([
             ('GRID', (0,0), (-1,-1), 1, colors.black),
-            ('SPAN', (1,0), (3,0)),  # Span "Current Asset Allocation" across three columns
+            ('SPAN', (1,0), (3,0)),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('ALIGN', (0,0), (-1,-1), 'CENTER'),
             ('LEFTPADDING', (0,0), (-1,-1), 8),
             ('RIGHTPADDING', (0,0), (-1,-1), 8),
             ('TOPPADDING', (0,0), (-1,-1), 8),
             ('BOTTOMPADDING', (0,0), (-1,-1), 8),
-            ('BACKGROUND', (0,0), (-1,1), HexColor('#E6F3F8')),  # Blue header background
+            ('BACKGROUND', (0,0), (-1,1), HexColor('#E6F3F8')),
         ]))
         elements.append(asset_alloc_table)
         elements.append(Spacer(1, 20))
         
-        # Investment Details Table - Further Action text kept with table
         if not investment_df.empty and not investment_df.dropna(how='all').empty:
             total_amount = investment_df["Amount (Rs.)"].sum()
             
-            # Create investment table with blue headers
             investment_table_data = []
-            # Header
             investment_table_data.append([
                 Paragraph("<b>Sr. No.</b>", info_table_style),
                 Paragraph("<b>Scheme Type</b>", info_table_style),
@@ -687,43 +791,42 @@ def show_mom():
                 Paragraph("<b>Amount (Rs.)</b>", info_table_style)
             ])
             
-            # Data rows
             for index, row in investment_df.iterrows():
                 if not pd.isna(row["Scheme Type"]) and row["Scheme Type"].strip():
+                    amount_formatted = format_indian_number(row['Amount (Rs.)']) if pd.notna(row['Amount (Rs.)']) else "0.00"
+                    
                     investment_table_data.append([
                         Paragraph(f"<b>{row['Sr. No.']}</b>", info_table_style),
                         Paragraph(f"<b>{row['Scheme Type']}</b>", info_table_style),
                         Paragraph(str(row['Scheme Name']), info_table_style),
                         Paragraph(f"{row['Allocation (%)']:.2f}" if pd.notna(row['Allocation (%)']) else "0.00", info_table_style),
-                        Paragraph(f"{row['Amount (Rs.)']:,.2f}" if pd.notna(row['Amount (Rs.)']) else "0.00", info_table_style)
+                        Paragraph(f"Rs.{amount_formatted}", info_table_style)
                     ])
             
-            # Total row
+            total_formatted = format_indian_number(total_amount)
             investment_table_data.append([
                 Paragraph("<b>Total</b>", info_table_style),
                 "", "",
-                Paragraph("<b>100</b>", info_table_style),
-                Paragraph(f"<b>{total_amount:,.2f}</b>", info_table_style)
+                Paragraph("<b>100.00</b>", info_table_style),
+                Paragraph(f"<b>Rs.{total_formatted}</b>", info_table_style)
             ])
             
-            # Fixed column widths with blue headers
             investment_table = Table(investment_table_data, colWidths=[1.5*cm, 2.5*cm, 7*cm, 2.5*cm, 2.5*cm])
             investment_table.setStyle(TableStyle([
                 ('GRID', (0,0), (-1,-1), 1, colors.black),
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                ('ALIGN', (0,0), (-1,0), 'CENTER'),  # Center headers
-                ('ALIGN', (3,1), (4,-1), 'RIGHT'),   # Right align numbers
+                ('ALIGN', (0,0), (-1,0), 'CENTER'),
+                ('ALIGN', (3,1), (4,-1), 'RIGHT'),
                 ('LEFTPADDING', (0,0), (-1,-1), 6),
                 ('RIGHTPADDING', (0,0), (-1,-1), 6),
                 ('TOPPADDING', (0,0), (-1,-1), 8),
                 ('BOTTOMPADDING', (0,0), (-1,-1), 8),
-                ('BACKGROUND', (0,0), (-1,0), HexColor('#E6F3F8')),  # Blue header background
-                ('BACKGROUND', (0,-1), (-1,-1), HexColor('#E6F3F8')),  # Blue total row background
+                ('BACKGROUND', (0,0), (-1,0), HexColor('#E6F3F8')),
+                ('BACKGROUND', (0,-1), (-1,-1), HexColor('#E6F3F8')),
                 ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
                 ('FONTSIZE', (0,0), (-1,-1), 9),
             ]))
             
-            # Keep the table together with the Further Action text
             investment_section = KeepTogether([
                 Paragraph("<b>Further Action:</b>", normal_style),
                 Paragraph("Detail of Investment is as mention below in chart:", normal_style),
@@ -734,16 +837,14 @@ def show_mom():
             elements.append(investment_section)
             elements.append(Spacer(1, 20))
         
-        # Fund Performance with same blue headers
         if include_mom_fund_perf and mom_fund_perf is not None and not mom_fund_perf.empty:
-            elements.append(PageBreak())  # Move to new page for fund performance
+            elements.append(PageBreak())
             elements.append(Paragraph("<b>Fund Performance of above funds are given below:</b>", section_heading_style))
             
             fund_perf_table_optimized = fund_performance_table(mom_fund_perf)
             elements.append(fund_perf_table_optimized)
             elements.append(Spacer(1, 20))
         
-        # Factsheets
         if mom_factsheet_links.strip():
             elements.append(Paragraph("<b>Factsheets of the above funds are given below:</b>", section_heading_style))
             for line in mom_factsheet_links.strip().splitlines():
@@ -759,10 +860,8 @@ def show_mom():
                     elements.append(Paragraph(line.strip(), normal_style))
             elements.append(Spacer(1, 20))
         
-        # Force new page for closing
         elements.append(PageBreak())
         
-        # Closing on separate page
         elements.append(Spacer(1, 50))
         elements.append(Paragraph("Please revert for any clarifications. Kindly approve the same so that we can initiate the transactions for your authorization.", normal_style))
         elements.append(Spacer(1, 20))
@@ -774,15 +873,13 @@ def show_mom():
         elements.append(Paragraph("<b>Sandeep Sahni/Puneet Kohli</b>", normal_style))
         elements.append(Paragraph("<b>91-9872804694/91-9872804694</b>", normal_style))
         
-        # Force new page for disclaimer
         elements.append(PageBreak())
         
-        # CENTERED DISCLAIMER HEADING
         disclaimer_heading_style = ParagraphStyle(
             name='DisclaimerHeading', 
             fontSize=16, 
             leading=20, 
-            alignment=1,  # Center alignment
+            alignment=1,
             spaceAfter=25, 
             fontName='Helvetica-Bold'
         )
@@ -790,32 +887,27 @@ def show_mom():
         elements.append(Spacer(1, 30))
         elements.append(Paragraph("DISCLAIMER", disclaimer_heading_style))
         
-        # Disclaimer content
         disclaimer_style = ParagraphStyle(
             name='DisclaimerStyle', 
             parent=styles['Normal'], 
             fontSize=9, 
             leading=12,
-            fontName='Helvetica'
+            fontName=UNICODE_FONT
         )
         
-        # Split disclaimer into paragraphs for better formatting
         disclaimer_paragraphs = [p.strip() for p in DISCLAIMER_TEXT.split('.') if p.strip()]
         for paragraph in disclaimer_paragraphs:
             if paragraph:
                 elements.append(Paragraph(paragraph + ".", disclaimer_style))
                 elements.append(Spacer(1, 6))
 
-        # Adjusted margins to accommodate header/footer
         doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=cm, leftMargin=cm, topMargin=5*cm, bottomMargin=3*cm)
         doc.build(elements, onFirstPage=header_footer_with_logos, onLaterPages=header_footer_with_logos)
         
         buffer.seek(0)
         return buffer
 
-    # FIXED VALIDATION SECTION
     if st.button("Generate MoM PDF"):
-        # Safe validation to handle None values
         client_name_safe = (client_name_mom or "").strip()
         meeting_date_safe = (meeting_date or "").strip()
         
@@ -826,7 +918,831 @@ def show_mom():
             st.success("Minutes of Meeting PDF generated successfully!")
             st.download_button("Download MoM PDF", data=pdf, file_name="Minutes_of_Meeting.pdf", mime="application/pdf")
 
+# --- Financial Goal Planner Generator ---
+def show_financial_goal_planner():
+    if st.button("← Back to Main Menu", key="back_goal_planner"):
+        st.session_state.app_mode = None
+        st.rerun()
+    
+    st.title("🎯 Financial Goal Planner")
+    
+    # --- Client Information ---
+    st.header("👤 Client Information")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        client_name_goal = st.text_input("Client Name (Mr./Ms.)", placeholder="Enter client name")
+        current_age = st.number_input("Current Age", min_value=18, max_value=80, value=30)
+        
+    with col2:
+        date_goal = st.text_input("Date", value=datetime.now().strftime("%d-%m-%Y"))
+        risk_profile_goal = st.selectbox("Risk Profile", ["Conservative", "Moderate", "Aggressive"], key="goal_risk")
+    
+    # Auto-fill expected returns based on risk profile
+    default_return = 8 if risk_profile_goal == "Conservative" else 10 if risk_profile_goal == "Moderate" else 12
+    
+    st.markdown("---")
+    st.header("🎯 Financial Goals Configuration")
+    
+    # --- Goal 1: Education Goal ---
+    with st.expander("🎓 Education Goal", expanded=False):
+        education_enabled = st.checkbox("Enable Education Goal", key="enable_education")
+        
+        if education_enabled:
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("Child Details")
+                edu_child_name = st.text_input("Child Name", key="edu_child", placeholder="Enter child's name")
+                child_current_age = st.number_input("Child's Current Age", min_value=0, max_value=25, value=5, key="child_age")
+                
+                st.subheader("Goal Timeline")
+                edu_graduation_age = st.number_input("Graduation Age", value=18, min_value=16, max_value=25, key="edu_grad_age")
+                edu_postgrad_age = st.number_input("Post-Graduation Age", value=21, min_value=18, max_value=30, key="edu_postgrad_age")
+                
+            with col2:
+                st.subheader("Financial Planning")
+                edu_graduation_cost = st.number_input("Graduation Cost (Rs.)", value=1000000, min_value=0, key="edu_grad_cost", 
+                                                    help="Total amount needed for graduation")
+                edu_postgrad_cost = st.number_input("Post-Graduation Cost (Rs.)", value=1500000, min_value=0, key="edu_postgrad_cost",
+                                                   help="Total amount needed for post-graduation")
+                edu_existing_savings = st.number_input("Current Savings (Rs.)", value=0, min_value=0, key="edu_existing",
+                                                     help="Amount already saved for education")
+                
+                st.subheader("Investment Parameters")
+                edu_inflation = st.number_input("Education Inflation (%)", value=8.0, min_value=0.0, max_value=20.0, key="edu_inflation")
+                edu_expected_return = st.number_input("Expected Return (%)", value=float(default_return), min_value=0.0, max_value=30.0, key="edu_return")
+            
+            # Display timeline with Indian formatting
+            grad_years = max(0, edu_graduation_age - child_current_age)
+            postgrad_years = max(0, edu_postgrad_age - child_current_age)
+            
+            if grad_years <= 0:
+                st.warning("⚠️ Graduation age should be greater than child's current age")
+            elif postgrad_years <= grad_years:
+                st.warning("⚠️ Post-graduation age should be greater than graduation age")
+            else:
+                st.success(f"📅 **Timeline:** Graduation in {grad_years} years, Post-graduation in {postgrad_years} years")
+                
+                if edu_existing_savings > 0:
+                    grad_progress = (edu_existing_savings / edu_graduation_cost) * 100 if edu_graduation_cost > 0 else 0
+                    postgrad_progress = (edu_existing_savings / edu_postgrad_cost) * 100 if edu_postgrad_cost > 0 else 0
+                    formatted_savings = format_indian_number(edu_existing_savings)
+                    st.info(f"💰 **Current Savings:** Rs.{formatted_savings} | **Progress:** Graduation {grad_progress:.1f}%, Post-Graduation {postgrad_progress:.1f}%")
+    
+    # --- Goal 2: Marriage/Business Goal ---
+    with st.expander("💒 Marriage/Business Goal", expanded=False):
+        marriage_enabled = st.checkbox("Enable Marriage/Business Goal", key="enable_marriage")
+        
+        if marriage_enabled:
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("Goal Details")
+                marriage_person_name = st.text_input("Person Name", key="marriage_person", placeholder="Enter person's name")
+                marriage_age = st.number_input("Target Age", value=max(25, current_age + 1), min_value=current_age + 1, max_value=80, key="marriage_age")
+                marriage_goal_amount = st.number_input("Goal Amount (Rs.)", value=2000000, min_value=0, key="marriage_amount",
+                                                     help="Total amount needed")
+                
+            with col2:
+                st.subheader("Current Progress & Planning")
+                marriage_existing_savings = st.number_input("Current Savings (Rs.)", value=0, min_value=0, key="marriage_existing",
+                                                          help="Amount already saved")
+                marriage_inflation = st.number_input("Inflation Rate (%)", value=6.0, min_value=0.0, max_value=20.0, key="marriage_inflation")
+                marriage_expected_return = st.number_input("Expected Return (%)", value=float(default_return), min_value=0.0, max_value=30.0, key="marriage_return")
+            
+            years_remaining = marriage_age - current_age
+            progress = (marriage_existing_savings / marriage_goal_amount * 100) if marriage_goal_amount > 0 else 0
+            
+            formatted_target = format_indian_number(marriage_goal_amount)
+            formatted_savings = format_indian_number(marriage_existing_savings)
+            st.success(f"📅 **Timeline:** {years_remaining} years remaining | **Target:** Rs.{formatted_target} | **Saved:** Rs.{formatted_savings} ({progress:.1f}%)")
+    
+    # --- Goal 3: Emergency Corpus ---
+    with st.expander("🚨 Emergency Corpus", expanded=False):
+        emergency_enabled = st.checkbox("Enable Emergency Corpus", key="enable_emergency")
+        
+        if emergency_enabled:
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("Emergency Planning")
+                emergency_goal_amount = st.number_input("Emergency Fund Amount (Rs.)", value=600000, min_value=0, key="emergency_amount",
+                                                       help="Recommended: 6-12 months of expenses")
+                emergency_age = st.number_input("Target Age", value=current_age + 2, min_value=current_age + 1, max_value=80, key="emergency_age")
+                
+            with col2:
+                st.subheader("Current Status & Parameters")
+                emergency_existing_savings = st.number_input("Current Emergency Fund (Rs.)", value=0, min_value=0, key="emergency_existing")
+                emergency_inflation = st.number_input("Inflation Rate (%)", value=4.0, min_value=0.0, max_value=20.0, key="emergency_inflation")
+                emergency_expected_return = st.number_input("Expected Return (%)", value=6.0, min_value=0.0, max_value=30.0, key="emergency_return")
+            
+            years_remaining = emergency_age - current_age
+            progress = (emergency_existing_savings / emergency_goal_amount * 100) if emergency_goal_amount > 0 else 0
+            
+            formatted_target = format_indian_number(emergency_goal_amount)
+            formatted_savings = format_indian_number(emergency_existing_savings)
+            st.success(f"📅 **Timeline:** {years_remaining} years remaining | **Target:** Rs.{formatted_target} | **Saved:** Rs.{formatted_savings} ({progress:.1f}%)")
+    
+    # --- Goal 4: Retirement Corpus ---
+    with st.expander("🏖️ Retirement Corpus", expanded=False):
+        retirement_enabled = st.checkbox("Enable Retirement Corpus", key="enable_retirement")
+        
+        if retirement_enabled:
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("Retirement Planning")
+                retirement_age = st.number_input("Retirement Age", value=max(60, current_age + 5), min_value=current_age + 5, max_value=80, key="retirement_age")
+                retirement_goal_amount = st.number_input("Retirement Corpus (Rs.)", value=50000000, min_value=0, key="retirement_amount",
+                                                        help="Target retirement corpus")
+                
+            with col2:
+                st.subheader("Current Status & Parameters")
+                retirement_existing_savings = st.number_input("Current Retirement Savings (Rs.)", value=0, min_value=0, key="retirement_existing")
+                retirement_inflation = st.number_input("Inflation Rate (%)", value=6.0, min_value=0.0, max_value=20.0, key="retirement_inflation")
+                retirement_expected_return = st.number_input("Expected Return (%)", value=float(default_return), min_value=0.0, max_value=30.0, key="retirement_return")
+            
+            years_remaining = retirement_age - current_age
+            progress = (retirement_existing_savings / retirement_goal_amount * 100) if retirement_goal_amount > 0 else 0
+            
+            formatted_target = format_indian_number(retirement_goal_amount)
+            formatted_savings = format_indian_number(retirement_existing_savings)
+            st.success(f"📅 **Timeline:** {years_remaining} years remaining | **Target:** Rs.{formatted_target} | **Saved:** Rs.{formatted_savings} ({progress:.1f}%)")
+    
+    # --- Goal 5: Retirement Expenses ---
+    with st.expander("💰 Retirement Monthly Expenses", expanded=False):
+        retirement_expenses_enabled = st.checkbox("Enable Retirement Expenses Planning", key="enable_retirement_expenses")
+        
+        if retirement_expenses_enabled:
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("Current Lifestyle")
+                current_monthly_expenses = st.number_input("Current Monthly Expenses (Rs.)", value=50000, min_value=0, key="current_expenses")
+                retirement_age_exp = st.number_input("Retirement Age", value=max(60, current_age + 5), min_value=current_age + 5, max_value=80, key="retirement_age_exp")
+                life_expectancy = st.number_input("Life Expectancy", value=80, min_value=retirement_age_exp + 5, max_value=100, key="life_expectancy")
+                
+            with col2:
+                st.subheader("Planning Parameters")
+                retirement_exp_existing_savings = st.number_input("Current Savings for Expenses (Rs.)", value=0, min_value=0, key="retirement_exp_existing")
+                expense_drop_percent = st.number_input("Expense Reduction after Retirement (%)", value=20.0, min_value=0.0, max_value=50.0, key="expense_drop")
+                tax_rate = st.number_input("Tax on Investment Income (%)", value=10.0, min_value=0.0, max_value=40.0, key="tax_rate")
+                retirement_inflation_exp = st.number_input("Retirement Inflation (%)", value=4.0, min_value=0.0, max_value=20.0, key="retirement_inflation_exp")
+                retirement_return_exp = st.number_input("Return during Retirement (%)", value=8.0, min_value=0.0, max_value=20.0, key="retirement_return_exp")
+            
+            years_to_retirement = retirement_age_exp - current_age
+            post_retirement_years = life_expectancy - retirement_age_exp
+            
+            formatted_expenses = format_indian_number(current_monthly_expenses)
+            formatted_savings = format_indian_number(retirement_exp_existing_savings)
+            st.success(f"📅 **Timeline:** Retirement in {years_to_retirement} years | **Current Monthly Expenses:** Rs.{formatted_expenses} | **Current Savings:** Rs.{formatted_savings}")
+    
+    # --- Current Assets ---
+    st.markdown("---")
+    st.header("💼 Current Assets Summary")
+    st.write("📝 Please provide details of your current general assets (separate from goal-specific savings above):")
+    
+    asset_data = {
+        "Asset Class": ["PPF", "FDR/Bank Deposits", "Mutual Funds", "Direct Equity", "Real Estate", "Gold", "Others"],
+        "Expected Returns (%)": [7.5, 6.0, 12.0, 15.0, 8.0, 6.0, 8.0],
+        "Current Value (Rs.)": [0, 0, 0, 0, 0, 0, 0]
+    }
+    
+    assets_df = st.data_editor(
+        pd.DataFrame(asset_data),
+        use_container_width=True,
+        key="current_assets",
+        column_config={
+            "Asset Class": st.column_config.TextColumn("Asset Class", disabled=True),
+            "Expected Returns (%)": st.column_config.NumberColumn("Expected Returns (%)", min_value=0.0, max_value=30.0, format="%.1f"),
+            "Current Value (Rs.)": st.column_config.NumberColumn("Current Value (Rs.)", min_value=0, format="%d")
+        }
+    )
+    
+    total_assets = assets_df["Current Value (Rs.)"].sum()
+    if total_assets > 0:
+        formatted_total_assets = format_indian_number(total_assets)
+        st.info(f"💰 **Total Current Assets:** Rs.{formatted_total_assets}")
+    
+    # --- Calculate Button ---
+    st.markdown("---")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        calculate_button = st.button("🧮 Calculate Financial Goals", type="primary", use_container_width=True)
+    
+    # --- Calculations ---
+    if calculate_button:
+        enabled_goals = [education_enabled, marriage_enabled, emergency_enabled, retirement_enabled, retirement_expenses_enabled]
+        
+        if not any(enabled_goals):
+            st.error("❌ Please enable at least one financial goal to calculate!")
+            return
+        
+        if not client_name_goal.strip():
+            st.error("❌ Please enter client name!")
+            return
+        
+        st.success("✅ Calculating your financial goals...")
+        
+        st.markdown("---")
+        st.header("📊 Financial Goal Analysis Results")
+        
+        goals_summary = []
+        total_sip = 0
+        total_stepup_sip = 0
+        total_lumpsum = 0
+        
+        # Education Goal Calculations
+        if education_enabled and edu_child_name.strip() and grad_years > 0:
+            if grad_years > 0:
+                grad_future_value = calculate_future_value(edu_graduation_cost, edu_inflation, grad_years)
+                existing_grad_future_value = calculate_future_value(edu_existing_savings, edu_expected_return, grad_years)
+                grad_deficit = max(0, grad_future_value - existing_grad_future_value)
+                
+                grad_sip = calculate_sip_amount(grad_deficit, grad_years, edu_expected_return, 0)
+                grad_stepup_sip = calculate_stepup_sip(grad_sip)
+                grad_lumpsum = calculate_lumpsum_amount(grad_deficit, grad_years, edu_expected_return, 0)
+                grad_progress = (existing_grad_future_value / grad_future_value) * 100 if grad_future_value > 0 else 0
+                
+                goals_summary.append({
+                    "Goal": f"Graduation of {edu_child_name} @ {edu_graduation_age}",
+                    "Target Amount": f"Rs.{format_indian_number(edu_graduation_cost)}",
+                    "Future Value Required": f"Rs.{format_indian_number(grad_future_value)}",
+                    "Existing Progress": f"Rs.{format_indian_number(existing_grad_future_value)} ({grad_progress:.1f}%)",
+                    "Deficit": f"Rs.{format_indian_number(grad_deficit)}",
+                    "Years": grad_years,
+                    "Monthly SIP": f"Rs.{format_indian_number(grad_sip)}",
+                    "Step-up SIP": f"Rs.{format_indian_number(grad_stepup_sip)}",
+                    "Lumpsum": f"Rs.{format_indian_number(grad_lumpsum)}",
+                    "Assumptions": f"Return: {edu_expected_return}%, Inflation: {edu_inflation}%"
+                })
+                
+                total_sip += grad_sip
+                total_stepup_sip += grad_stepup_sip
+                total_lumpsum += grad_lumpsum
+            
+            if postgrad_years > 0 and postgrad_years > grad_years:
+                postgrad_future_value = calculate_future_value(edu_postgrad_cost, edu_inflation, postgrad_years)
+                existing_postgrad_future_value = calculate_future_value(edu_existing_savings, edu_expected_return, postgrad_years)
+                postgrad_deficit = max(0, postgrad_future_value - existing_postgrad_future_value)
+                
+                postgrad_sip = calculate_sip_amount(postgrad_deficit, postgrad_years, edu_expected_return, 0)
+                postgrad_stepup_sip = calculate_stepup_sip(postgrad_sip)
+                postgrad_lumpsum = calculate_lumpsum_amount(postgrad_deficit, postgrad_years, edu_expected_return, 0)
+                postgrad_progress = (existing_postgrad_future_value / postgrad_future_value) * 100 if postgrad_future_value > 0 else 0
+                
+                goals_summary.append({
+                    "Goal": f"Post-Graduation of {edu_child_name} @ {edu_postgrad_age}",
+                    "Target Amount": f"Rs.{format_indian_number(edu_postgrad_cost)}",
+                    "Future Value Required": f"Rs.{format_indian_number(postgrad_future_value)}",
+                    "Existing Progress": f"Rs.{format_indian_number(existing_postgrad_future_value)} ({postgrad_progress:.1f}%)",
+                    "Deficit": f"Rs.{format_indian_number(postgrad_deficit)}",
+                    "Years": postgrad_years,
+                    "Monthly SIP": f"Rs.{format_indian_number(postgrad_sip)}",
+                    "Step-up SIP": f"Rs.{format_indian_number(postgrad_stepup_sip)}",
+                    "Lumpsum": f"Rs.{format_indian_number(postgrad_lumpsum)}",
+                    "Assumptions": f"Return: {edu_expected_return}%, Inflation: {edu_inflation}%"
+                })
+                
+                total_sip += postgrad_sip
+                total_stepup_sip += postgrad_stepup_sip
+                total_lumpsum += postgrad_lumpsum
+        
+        # Marriage/Business Goal Calculations
+        if marriage_enabled and marriage_person_name.strip():
+            marriage_years = marriage_age - current_age
+            if marriage_years > 0:
+                marriage_future_value = calculate_future_value(marriage_goal_amount, marriage_inflation, marriage_years)
+                existing_marriage_future_value = calculate_future_value(marriage_existing_savings, marriage_expected_return, marriage_years)
+                marriage_deficit = max(0, marriage_future_value - existing_marriage_future_value)
+                
+                marriage_sip = calculate_sip_amount(marriage_deficit, marriage_years, marriage_expected_return, 0)
+                marriage_stepup_sip = calculate_stepup_sip(marriage_sip)
+                marriage_lumpsum = calculate_lumpsum_amount(marriage_deficit, marriage_years, marriage_expected_return, 0)
+                marriage_progress = (existing_marriage_future_value / marriage_future_value) * 100 if marriage_future_value > 0 else 0
+                
+                goals_summary.append({
+                    "Goal": f"Marriage/Business of {marriage_person_name} @ {marriage_age}",
+                    "Target Amount": f"Rs.{format_indian_number(marriage_goal_amount)}",
+                    "Future Value Required": f"Rs.{format_indian_number(marriage_future_value)}",
+                    "Existing Progress": f"Rs.{format_indian_number(existing_marriage_future_value)} ({marriage_progress:.1f}%)",
+                    "Deficit": f"Rs.{format_indian_number(marriage_deficit)}",
+                    "Years": marriage_years,
+                    "Monthly SIP": f"Rs.{format_indian_number(marriage_sip)}",
+                    "Step-up SIP": f"Rs.{format_indian_number(marriage_stepup_sip)}",
+                    "Lumpsum": f"Rs.{format_indian_number(marriage_lumpsum)}",
+                    "Assumptions": f"Return: {marriage_expected_return}%, Inflation: {marriage_inflation}%"
+                })
+                
+                total_sip += marriage_sip
+                total_stepup_sip += marriage_stepup_sip
+                total_lumpsum += marriage_lumpsum
+        
+        # Emergency Corpus Calculations
+        if emergency_enabled:
+            emergency_years = emergency_age - current_age
+            if emergency_years > 0:
+                emergency_future_value = calculate_future_value(emergency_goal_amount, emergency_inflation, emergency_years)
+                existing_emergency_future_value = calculate_future_value(emergency_existing_savings, emergency_expected_return, emergency_years)
+                emergency_deficit = max(0, emergency_future_value - existing_emergency_future_value)
+                
+                emergency_sip = calculate_sip_amount(emergency_deficit, emergency_years, emergency_expected_return, 0)
+                emergency_stepup_sip = calculate_stepup_sip(emergency_sip)
+                emergency_lumpsum = calculate_lumpsum_amount(emergency_deficit, emergency_years, emergency_expected_return, 0)
+                emergency_progress = (existing_emergency_future_value / emergency_future_value) * 100 if emergency_future_value > 0 else 0
+                
+                goals_summary.append({
+                    "Goal": f"Emergency Corpus @ {emergency_age}",
+                    "Target Amount": f"Rs.{format_indian_number(emergency_goal_amount)}",
+                    "Future Value Required": f"Rs.{format_indian_number(emergency_future_value)}",
+                    "Existing Progress": f"Rs.{format_indian_number(existing_emergency_future_value)} ({emergency_progress:.1f}%)",
+                    "Deficit": f"Rs.{format_indian_number(emergency_deficit)}",
+                    "Years": emergency_years,
+                    "Monthly SIP": f"Rs.{format_indian_number(emergency_sip)}",
+                    "Step-up SIP": f"Rs.{format_indian_number(emergency_stepup_sip)}",
+                    "Lumpsum": f"Rs.{format_indian_number(emergency_lumpsum)}",
+                    "Assumptions": f"Return: {emergency_expected_return}%, Inflation: {emergency_inflation}%"
+                })
+                
+                total_sip += emergency_sip
+                total_stepup_sip += emergency_stepup_sip
+                total_lumpsum += emergency_lumpsum
+        
+        # Retirement Corpus Calculations
+        if retirement_enabled:
+            retirement_years = retirement_age - current_age
+            if retirement_years > 0:
+                retirement_future_value = calculate_future_value(retirement_goal_amount, retirement_inflation, retirement_years)
+                existing_retirement_future_value = calculate_future_value(retirement_existing_savings, retirement_expected_return, retirement_years)
+                retirement_deficit = max(0, retirement_future_value - existing_retirement_future_value)
+                
+                retirement_sip = calculate_sip_amount(retirement_deficit, retirement_years, retirement_expected_return, 0)
+                retirement_stepup_sip = calculate_stepup_sip(retirement_sip)
+                retirement_lumpsum = calculate_lumpsum_amount(retirement_deficit, retirement_years, retirement_expected_return, 0)
+                retirement_progress = (existing_retirement_future_value / retirement_future_value) * 100 if retirement_future_value > 0 else 0
+                
+                goals_summary.append({
+                    "Goal": f"Retirement Corpus @ {retirement_age}",
+                    "Target Amount": f"Rs.{format_indian_number(retirement_goal_amount)}",
+                    "Future Value Required": f"Rs.{format_indian_number(retirement_future_value)}",
+                    "Existing Progress": f"Rs.{format_indian_number(existing_retirement_future_value)} ({retirement_progress:.1f}%)",
+                    "Deficit": f"Rs.{format_indian_number(retirement_deficit)}",
+                    "Years": retirement_years,
+                    "Monthly SIP": f"Rs.{format_indian_number(retirement_sip)}",
+                    "Step-up SIP": f"Rs.{format_indian_number(retirement_stepup_sip)}",
+                    "Lumpsum": f"Rs.{format_indian_number(retirement_lumpsum)}",
+                    "Assumptions": f"Return: {retirement_expected_return}%, Inflation: {retirement_inflation}%"
+                })
+                
+                total_sip += retirement_sip
+                total_stepup_sip += retirement_stepup_sip
+                total_lumpsum += retirement_lumpsum
+        
+        # Retirement Expenses Calculations
+        if retirement_expenses_enabled:
+            retirement_years = retirement_age_exp - current_age
+            post_retirement_years = life_expectancy - retirement_age_exp
+            
+            if retirement_years > 0 and post_retirement_years > 0:
+                future_monthly_expenses = calculate_future_value(current_monthly_expenses, retirement_inflation_exp, retirement_years)
+                adjusted_monthly_expenses = future_monthly_expenses * (1 - expense_drop_percent/100)
+                retirement_expense_corpus = calculate_retirement_corpus(
+                    adjusted_monthly_expenses, post_retirement_years, 
+                    retirement_inflation_exp, tax_rate, retirement_return_exp
+                )
+                
+                existing_retirement_exp_future_value = calculate_future_value(retirement_exp_existing_savings, retirement_expected_return, retirement_years)
+                retirement_exp_deficit = max(0, retirement_expense_corpus - existing_retirement_exp_future_value)
+                
+                retirement_exp_sip = calculate_sip_amount(retirement_exp_deficit, retirement_years, retirement_expected_return, 0)
+                retirement_exp_stepup_sip = calculate_stepup_sip(retirement_exp_sip)
+                retirement_exp_lumpsum = calculate_lumpsum_amount(retirement_exp_deficit, retirement_years, retirement_expected_return, 0)
+                retirement_exp_progress = (existing_retirement_exp_future_value / retirement_expense_corpus) * 100 if retirement_expense_corpus > 0 else 0
+                
+                goals_summary.append({
+                    "Goal": f"Retirement Expenses @ {retirement_age_exp}",
+                    "Target Amount": f"Rs.{format_indian_number(current_monthly_expenses)}/month",
+                    "Future Value Required": f"Rs.{format_indian_number(retirement_expense_corpus)}",
+                    "Existing Progress": f"Rs.{format_indian_number(existing_retirement_exp_future_value)} ({retirement_exp_progress:.1f}%)",
+                    "Deficit": f"Rs.{format_indian_number(retirement_exp_deficit)}",
+                    "Years": retirement_years,
+                    "Monthly SIP": f"Rs.{format_indian_number(retirement_exp_sip)}",
+                    "Step-up SIP": f"Rs.{format_indian_number(retirement_exp_stepup_sip)}",
+                    "Lumpsum": f"Rs.{format_indian_number(retirement_exp_lumpsum)}",
+                    "Assumptions": f"Monthly expenses: Rs.{format_indian_number(adjusted_monthly_expenses)} at retirement"
+                })
+                
+                total_sip += retirement_exp_sip
+                total_stepup_sip += retirement_exp_stepup_sip
+                total_lumpsum += retirement_exp_lumpsum
+        
+        # Display Results
+        if goals_summary:
+            # Add totals row with Indian formatting
+            goals_summary.append({
+                "Goal": "**TOTAL ADDITIONAL REQUIRED**",
+                "Target Amount": "**-**",
+                "Future Value Required": "**-**",
+                "Existing Progress": "**-**",
+                "Deficit": "**-**",
+                "Years": "**-**",
+                "Monthly SIP": f"**Rs.{format_indian_number(total_sip)}**",
+                "Step-up SIP": f"**Rs.{format_indian_number(total_stepup_sip)}**",
+                "Lumpsum": f"**Rs.{format_indian_number(total_lumpsum)}**",
+                "Assumptions": "**Combined Additional Requirements**"
+            })
+            
+            # Display table
+            results_df = pd.DataFrame(goals_summary)
+            st.dataframe(results_df, use_container_width=True, hide_index=True)
+            
+            # Key Insights with Indian formatting
+            st.subheader("📈 Key Financial Insights")
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric(
+                    label="Additional Monthly SIP Required",
+                    value=f"Rs.{format_indian_number(total_sip)}",
+                    help="Additional monthly SIP needed to achieve all goals"
+                )
+            with col2:
+                st.metric(
+                    label="Additional Step-up SIP Required", 
+                    value=f"Rs.{format_indian_number(total_stepup_sip)}",
+                    help="Step-up SIP with 10% annual increase"
+                )
+            with col3:
+                st.metric(
+                    label="Additional Lumpsum Required",
+                    value=f"Rs.{format_indian_number(total_lumpsum)}",
+                    help="One-time lumpsum investment needed"
+                )
+            
+            # Investment Recommendation
+            st.subheader("💡 Investment Recommendation")
+            if risk_profile_goal == "Aggressive":
+                st.info("**📊 Recommended Asset Allocation:** 70% Equity, 30% Debt\n\n✅ Higher growth potential for long-term goals\n\n⚠️ Higher volatility in short term")
+            elif risk_profile_goal == "Moderate":
+                st.info("**📊 Recommended Asset Allocation:** 60% Equity, 40% Debt\n\n✅ Balanced approach for steady growth\n\n✅ Moderate risk with reasonable returns")
+            else:
+                st.info("**📊 Recommended Asset Allocation:** 40% Equity, 60% Debt\n\n✅ Conservative approach with capital protection\n\n✅ Lower volatility and stable returns")
+            
+            # Progress Visualization with Custom Y-axis
+            st.subheader("📊 Goal Progress Visualization")
+            
+            if len(goals_summary) > 1:
+                chart_data = pd.DataFrame(goals_summary[:-1])
+                
+                def extract_percentage(progress_text):
+                    if pd.isna(progress_text) or progress_text == '-':
+                        return 0.0
+                    import re
+                    match = re.search(r'\((\d+\.?\d*)%\)', str(progress_text))
+                    if match:
+                        return float(match.group(1))
+                    return 0.0
+                
+                chart_data['Progress_Percentage'] = chart_data['Existing Progress'].apply(extract_percentage)
+                
+                import matplotlib.pyplot as plt
+                import numpy as np
+                
+                fig, ax = plt.subplots(figsize=(14, 8))
+                
+                bars = ax.bar(range(len(chart_data)), chart_data['Progress_Percentage'], 
+                            color='#1f77b4', alpha=0.8, edgecolor='navy', linewidth=1.5)
+                
+                # Customize Y-axis to show 0-100 in increments of 10
+                ax.set_yticks(np.arange(0, 101, 10))
+                ax.set_ylim(0, 100)
+                
+                ax.set_xticks(range(len(chart_data)))
+                ax.set_xticklabels([goal.replace(' @', '\n@') for goal in chart_data['Goal']], 
+                                 rotation=45, ha='right', fontsize=10)
+                
+                ax.set_ylabel('Progress Completion (%)', fontsize=14, fontweight='bold')
+                ax.set_xlabel('Financial Goals', fontsize=14, fontweight='bold')
+                ax.set_title('Financial Goals Progress Visualization', fontsize=16, fontweight='bold', pad=20)
+                
+                # Add percentage labels on top of bars
+                for i, (bar, percentage) in enumerate(zip(bars, chart_data['Progress_Percentage'])):
+                    height = bar.get_height()
+                    ax.text(bar.get_x() + bar.get_width()/2., height + 2,
+                            f'{percentage:.1f}%', ha='center', va='bottom', 
+                            fontweight='bold', fontsize=11)
+                
+                ax.grid(axis='y', alpha=0.3, linestyle='--')
+                ax.set_axisbelow(True)
+                
+                # Color bars based on progress
+                for i, (bar, percentage) in enumerate(zip(bars, chart_data['Progress_Percentage'])):
+                    if percentage >= 75:
+                        bar.set_color('#28a745')  # Green for good progress
+                    elif percentage >= 25:
+                        bar.set_color('#ffc107')  # Yellow for moderate progress  
+                    elif percentage > 0:
+                        bar.set_color('#fd7e14')  # Orange for some progress
+                    else:
+                        bar.set_color('#dc3545')  # Red for no progress
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+                
+                st.caption("**Y-Axis:** Percentage of goal completed (0-100% in increments of 10)")
+                st.caption("**X-Axis:** Financial Goals")
+                st.caption("**Colors:** 🟢 75%+ (On Track) | 🟡 25-74% (In Progress) | 🟠 1-24% (Started) | 🔴 0% (Not Started)")
+            
+            # Store results for PDF generation
+            st.session_state.goal_results = {
+                'client_info': {
+                    'name': client_name_goal,
+                    'age': current_age,
+                    'date': date_goal,
+                    'risk_profile': risk_profile_goal
+                },
+                'goals_summary': goals_summary,
+                'total_sip': total_sip,
+                'total_stepup_sip': total_stepup_sip,
+                'total_lumpsum': total_lumpsum,
+                'assets_df': assets_df
+            }
+            
+        else:
+            st.warning("⚠️ No valid goals configured. Please check your goal settings and try again.")
+    
+    # PDF Generation
+    def generate_goal_planner_pdf():
+        if 'goal_results' not in st.session_state:
+            return None
+            
+        buffer = BytesIO()
+        styles = getSampleStyleSheet()
+        
+        title_style = ParagraphStyle(
+            name='Title', fontSize=20, leading=24, alignment=1, 
+            spaceAfter=20, fontName='Helvetica-Bold'
+        )
+        
+        client_style = ParagraphStyle(
+            name='Client', parent=styles['Normal'], fontSize=11, 
+            leading=14, spaceAfter=8, fontName=UNICODE_FONT
+        )
+        
+        section_style = ParagraphStyle(
+            name='Section', fontSize=14, leading=18, spaceAfter=12, 
+            spaceBefore=15, fontName='Helvetica-Bold'
+        )
+        
+        normal_style = ParagraphStyle(
+            name='Normal', parent=styles['Normal'], fontSize=10, 
+            leading=12, fontName=UNICODE_FONT
+        )
+        
+        elements = []
+        results = st.session_state.goal_results
+        
+        elements.append(Paragraph("Financial Goal Planner Report", title_style))
+        elements.append(Paragraph(f"Generated on: {results['client_info']['date']}", client_style))
+        elements.append(Spacer(1, 20))
+        
+        elements.append(Paragraph("Client Information", section_style))
+        elements.append(Paragraph(f"<b>Client Name:</b> {results['client_info']['name']}", client_style))
+        elements.append(Paragraph(f"<b>Age:</b> {results['client_info']['age']} years", client_style))
+        elements.append(Paragraph(f"<b>Risk Profile:</b> {results['client_info']['risk_profile']}", client_style))
+        
+        risk_profile = results['client_info']['risk_profile']
+        if risk_profile == "Aggressive":
+            recommendation = "70% Equity, 30% Debt - Higher growth potential"
+        elif risk_profile == "Moderate":
+            recommendation = "60% Equity, 40% Debt - Balanced approach"
+        else:
+            recommendation = "40% Equity, 60% Debt - Conservative approach"
+        
+        elements.append(Paragraph(f"<b>Recommended Asset Allocation:</b> {recommendation}", client_style))
+        elements.append(Spacer(1, 15))
+        
+        elements.append(Paragraph("Financial Goals Analysis", section_style))
+        
+        goals_data = results['goals_summary']
+        if goals_data:
+            table_data = [
+                [Paragraph("<b>Goal</b>", normal_style),
+                 Paragraph("<b>Target</b>", normal_style),
+                 Paragraph("<b>Progress</b>", normal_style),
+                 Paragraph("<b>Monthly SIP</b>", normal_style),
+                 Paragraph("<b>Lumpsum</b>", normal_style)]
+            ]
+            
+            for goal in goals_data[:-1]:
+                table_data.append([
+                    Paragraph(goal['Goal'], normal_style),
+                    Paragraph(goal['Target Amount'], normal_style),
+                    Paragraph(goal['Existing Progress'], normal_style),
+                    Paragraph(goal['Monthly SIP'], normal_style),
+                    Paragraph(goal['Lumpsum'], normal_style)
+                ])
+            
+            goals_table = Table(table_data, colWidths=[5*cm, 2.5*cm, 3*cm, 2.5*cm, 2.5*cm])
+            goals_table.setStyle(TableStyle([
+                ('GRID', (0,0), (-1,-1), 1, colors.black),
+                ('BACKGROUND', (0,0), (-1,0), HexColor('#E6F3F8')),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('ALIGN', (0,0), (-1,0), 'CENTER'),
+                ('ALIGN', (1,1), (-1,-1), 'RIGHT'),
+                ('FONTSIZE', (0,0), (-1,-1), 8),
+                ('LEFTPADDING', (0,0), (-1,-1), 4),
+                ('RIGHTPADDING', (0,0), (-1,-1), 4),
+            ]))
+            
+            elements.append(goals_table)
+            elements.append(Spacer(1, 20))
+            
+            elements.append(Paragraph("Investment Summary", section_style))
+            elements.append(Paragraph(f"<b>Total Monthly SIP Required:</b> Rs.{format_indian_number(results['total_sip'])}", client_style))
+            elements.append(Paragraph(f"<b>Total Step-up SIP Required:</b> Rs.{format_indian_number(results['total_stepup_sip'])}", client_style))
+            elements.append(Paragraph(f"<b>Total Lumpsum Required:</b> Rs.{format_indian_number(results['total_lumpsum'])}", client_style))
+            
+            # ADD CURRENT ASSETS SECTION
+            elements.append(PageBreak())
+            elements.append(Spacer(1, 15))
+            elements.append(Paragraph("Current Asset Summary", section_style))
+            
+            assets_df = results['assets_df']
+            if not assets_df.empty:
+                asset_table_data = [
+                    [Paragraph("<b>Asset Class</b>", normal_style),
+                     Paragraph("<b>Expected Returns (%)</b>", normal_style),
+                     Paragraph("<b>Current Value (Rs.)</b>", normal_style)]
+                ]
+                
+                total_assets = 0
+                for _, row in assets_df.iterrows():
+                    if row['Current Value (Rs.)'] > 0:
+                        asset_table_data.append([
+                            Paragraph(str(row['Asset Class']), normal_style),
+                            Paragraph(f"{row['Expected Returns (%)']:.2f}", normal_style),
+                            Paragraph(f"Rs.{format_indian_number(row['Current Value (Rs.)'])}", normal_style)
+                        ])
+                        total_assets += row['Current Value (Rs.)']
+                
+                if total_assets > 0:
+                    asset_table_data.append([
+                        Paragraph("<b>Total Assets</b>", normal_style),
+                        Paragraph("<b>-</b>", normal_style),
+                        Paragraph(f"<b>Rs.{format_indian_number(total_assets)}</b>", normal_style)
+                    ])
+                
+                asset_table = Table(asset_table_data, colWidths=[6*cm, 4*cm, 4*cm])
+                asset_table.setStyle(TableStyle([
+                    ('GRID', (0,0), (-1,-1), 1, colors.black),
+                    ('BACKGROUND', (0,0), (-1,0), HexColor('#E6F3F8')),
+                    ('BACKGROUND', (0,-1), (-1,-1), HexColor('#E6F3F8')),
+                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                    ('ALIGN', (0,0), (-1,0), 'CENTER'),
+                    ('ALIGN', (1,1), (-1,-1), 'RIGHT'),
+                    ('FONTSIZE', (0,0), (-1,-1), 9),
+                    ('LEFTPADDING', (0,0), (-1,-1), 5),
+                    ('RIGHTPADDING', (0,0), (-1,-1), 5),
+                ]))
+                
+                elements.append(asset_table)
+            else:
+                elements.append(Paragraph("No current assets specified.", normal_style))
+            # ADD PROGRESS CHART SECTION
+            elements.append(Spacer(1, 15))
+            elements.append(Paragraph("Goal Progress Visualization", section_style))
 
+            # Generate progress chart
+            if goals_data and len(goals_data) > 1:  # Exclude the totals row
+                chart_goals = goals_data[:-1]  # Remove the totals row
+                
+                # Extract progress percentages from the data
+                progress_data = []
+                for goal in chart_goals:
+                    progress_text = goal.get('Existing Progress', '0%')
+                    # Extract percentage from text like "Rs.6,80,244.48 (26.9%)"
+                    import re
+                    match = re.search(r'\((\d+\.?\d*)%\)', str(progress_text))
+                    if match:
+                        percentage = float(match.group(1))
+                    else:
+                        percentage = 0.0
+                    
+                    progress_data.append({
+                        'goal_name': goal['Goal'].replace(' @', '\n@'),  # Line break for better display
+                        'percentage': percentage
+                    })
+                
+                # Create chart using matplotlib
+                import matplotlib.pyplot as plt
+                import matplotlib
+                matplotlib.use('Agg')  # Use non-GUI backend
+                
+                fig, ax = plt.subplots(figsize=(12, 6))
+                
+                goals_list = [item['goal_name'] for item in progress_data]
+                percentages = [item['percentage'] for item in progress_data]
+                
+                # Create bars with color coding
+                bar_colors = []
+                for percentage in percentages:
+                    if percentage >= 75:
+                        bar_colors.append('#28a745')  # Green for good progress
+                    elif percentage >= 25:
+                        bar_colors.append('#ffc107')  # Yellow for moderate progress
+                    elif percentage > 0:
+                        bar_colors.append('#fd7e14')  # Orange for some progress
+                    else:
+                        bar_colors.append('#dc3545')  # Red for no progress
+
+                bars = ax.bar(range(len(goals_list)), percentages, color=bar_colors, alpha=0.8, edgecolor='navy', linewidth=1.5)
+                
+                # Customize the chart
+                ax.set_ylim(0, 100)
+                ax.set_yticks(range(0, 101, 10))
+                ax.set_xticks(range(len(goals_list)))
+                ax.set_xticklabels(goals_list, rotation=45, ha='right', fontsize=9)
+                ax.set_ylabel('Progress Completion (%)', fontsize=12, fontweight='bold')
+                ax.set_xlabel('Financial Goals', fontsize=12, fontweight='bold')
+                ax.set_title('Financial Goals Progress Visualization', fontsize=14, fontweight='bold', pad=20)
+                
+                # Add percentage labels on top of bars
+                for i, (bar, percentage) in enumerate(zip(bars, percentages)):
+                    height = bar.get_height()
+                    ax.text(bar.get_x() + bar.get_width()/2., height + 2,
+                            f'{percentage:.1f}%', ha='center', va='bottom', 
+                            fontweight='bold', fontsize=10)
+                
+                # Add grid
+                ax.grid(axis='y', alpha=0.3, linestyle='--')
+                ax.set_axisbelow(True)
+                
+                plt.tight_layout()
+                
+                # Save chart as image and add to PDF
+                chart_buffer = BytesIO()  # Remove the duplicate import above this line
+                plt.savefig(chart_buffer, format='PNG', dpi=300, bbox_inches='tight')
+                chart_buffer.seek(0)
+                plt.close(fig)  # Close the figure to free memory
+                
+                # Add chart to PDF
+                from reportlab.platypus import Image
+                chart_image = Image(chart_buffer, width=16*cm, height=8*cm)
+                elements.append(chart_image)
+                
+        elements.append(PageBreak())
+        disclaimer_style = ParagraphStyle(
+            name='Disclaimer', fontSize=16, leading=20, alignment=1, 
+            spaceAfter=25, fontName='Helvetica-Bold'
+        )
+        
+        elements.append(Spacer(1, 30))
+        elements.append(Paragraph("DISCLAIMER", disclaimer_style))
+        
+        disclaimer_text_style = ParagraphStyle(
+            name='DisclaimerText', parent=styles['Normal'], fontSize=9, 
+            leading=12, fontName=UNICODE_FONT
+        )
+        
+        disclaimer_paragraphs = [p.strip() for p in DISCLAIMER_TEXT.split('.') if p.strip()]
+        for paragraph in disclaimer_paragraphs:
+            if paragraph:
+                elements.append(Paragraph(paragraph + ".", disclaimer_text_style))
+                elements.append(Spacer(1, 6))
+        
+        doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=cm, leftMargin=cm, 
+                               topMargin=5*cm, bottomMargin=3*cm)
+        doc.build(elements, onFirstPage=header_footer_with_logos, onLaterPages=header_footer_with_logos)
+        
+        buffer.seek(0)
+        return buffer
+        
+    
+    # PDF Generation Button
+    st.markdown("---")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("📄 Generate PDF Report", type="secondary", use_container_width=True):
+            if 'goal_results' not in st.session_state:
+                st.error("❌ Please calculate financial goals first!")
+            elif not client_name_goal.strip():
+                st.error("❌ Please enter client name to generate PDF!")
+            else:
+                with st.spinner("Generating your financial goal report..."):
+                    pdf = generate_goal_planner_pdf()
+                    if pdf:
+                        st.success("✅ PDF Report generated successfully!")
+                        st.download_button(
+                            "📥 Download Financial Goal Report",
+                            data=pdf,
+                            file_name=f"Financial_Goal_Report_{client_name_goal.replace(' ', '_')}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                    else:
+                        st.error("❌ Failed to generate PDF. Please try again.")
 
 # --- Main App Logic ---
 def main():
@@ -836,7 +1752,8 @@ def main():
         show_investment_sheet()
     elif st.session_state.app_mode == "mom":
         show_mom()
+    elif st.session_state.app_mode == "goal_planner":
+        show_financial_goal_planner()
 
 if __name__ == "__main__":
     main()
-
