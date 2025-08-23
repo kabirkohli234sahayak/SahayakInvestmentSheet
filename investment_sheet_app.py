@@ -1406,7 +1406,7 @@ def show_financial_goal_planner():
                 
                 chart_data['Progress_Percentage'] = chart_data['Existing Progress'].apply(extract_percentage)
                 
-                import matplotlib as plt
+                import matplotlib.pyplot as plt
                 import numpy as np
                 
                 fig, ax = plt.subplots(figsize=(14, 8))
@@ -1636,7 +1636,7 @@ def show_financial_goal_planner():
                     })
                 
                 # Create chart using matplotlib
-                import matplotlib as plt
+                import matplotlib.pyplot as plt
                 import matplotlib
                 matplotlib.use('Agg')  # Use non-GUI backend
                 
@@ -1757,5 +1757,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
