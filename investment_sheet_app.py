@@ -19,8 +19,8 @@ import numpy as np
 import math
 
 # Static assets
-LOGO = "D:/Sahayak essentials/Investment Sheet/static/logo.png"
-FOOTER = "D:/Sahayak essentials/Investment Sheet/static/footer.png"
+LOGO = "logo.png"
+FOOTER = "footer.png"
 
 st.set_page_config(
     page_title="Sahayak Associates | Document Generator", 
@@ -2249,3 +2249,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
