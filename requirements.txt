@@ -3,5 +3,4 @@ pandas
 reportlab
 PyPDF2
 matplotlib
-streamlit-javascript
 
