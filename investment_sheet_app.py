@@ -30,8 +30,8 @@ def get_screen_width(default=1024):  # Default to desktop width
     return width if width else default
 
 # Static assets
-LOGO = "D:/Sahayak essentials/Investment Sheet/static/logo.png"
-FOOTER = "D:/Sahayak essentials/Investment Sheet/static/footer.png"
+LOGO = "logo.png"
+FOOTER = "footer.png"
 
 # Detect screen width at app start and set mobile flag
 width = get_screen_width()
@@ -2448,3 +2448,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
