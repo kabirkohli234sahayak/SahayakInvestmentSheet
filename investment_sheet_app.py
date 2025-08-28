@@ -17,26 +17,16 @@ from PIL import Image as PILImage
 import matplotlib.pyplot as plt
 import numpy as np
 import math
-from streamlit_javascript import st_javascript
+
+# Static assets
+LOGO = "logo.png"
+FOOTER = "footer.png"
 
 st.set_page_config(
     page_title="Sahayak Associates | Document Generator", 
     layout="wide",
     initial_sidebar_state="collapsed"
 )
-
-def get_screen_width(default=1024):  # Default to desktop width
-    width = st_javascript("""window.innerWidth""")
-    return width if width else default
-
-# Static assets
-LOGO = "logo.png"
-FOOTER = "footer.png"
-
-# Detect screen width at app start and set mobile flag
-width = get_screen_width()
-st.session_state['is_mobile'] = width < 768
-
 
 # Enhanced CSS with BLUE GRADIENT THEME
 st.markdown("""
@@ -738,12 +728,9 @@ def show_header():
     try:
         logo = PILImage.open(LOGO)
         # Center the logo with controlled size
-        if st.session_state['is_mobile']:
-            st.image(logo, width=150)  # Smaller on mobile
-        else:
-            col1, col2, col3 = st.columns([2.30, 2, 1])
-            with col2:
-                st.image(logo, width=215)  # Fixed width on desktop
+        col1, col2, col3 = st.columns([2.30, 2, 1])
+        with col2:
+            st.image(logo, width=215)  # Fixed width instead of use_column_width=True
     except:
         st.markdown("""
         <div class="app-header">
@@ -775,8 +762,9 @@ def show_main_screen():
     
     st.markdown('<div class="services-grid">', unsafe_allow_html=True)
     
-    if st.session_state['is_mobile']:
-        # Vertical stacking on mobile
+    col1, col2 = st.columns(2, gap="large")
+    
+    with col1:
         st.markdown("""
         <div class="service-card">
             <h3 class="service-title">Investment Planning</h3>
@@ -799,7 +787,8 @@ def show_main_screen():
             st.session_state.app_mode = "goal_planner"
             st.session_state.calculations_done = False
             st.rerun()
-        
+    
+    with col2:
         st.markdown("""
         <div class="service-card">
             <h3 class="service-title">Meeting Documentation</h3>
@@ -821,55 +810,6 @@ def show_main_screen():
         if st.button("Meeting Checklist Generator", key="checklist_btn"):
             st.session_state.app_mode = "checklist"
             st.rerun()
-    else:
-        col1, col2 = st.columns(2, gap="large")
-        
-        with col1:
-            st.markdown("""
-            <div class="service-card">
-                <h3 class="service-title">Investment Planning</h3>
-                <p class="service-description">Generate professional investment sheets with portfolio allocations and fund performance analysis.</p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            if st.button("Investment Sheet Generator", key="investment_btn"):
-                st.session_state.app_mode = "investment"
-                st.rerun()
-            
-            st.markdown("""
-            <div class="service-card">
-                <h3 class="service-title">Goal Planning</h3>
-                <p class="service-description">Comprehensive financial goal planning with SIP calculations and progress tracking.</p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            if st.button("Financial Goal Planner", key="goal_btn"):
-                st.session_state.app_mode = "goal_planner"
-                st.session_state.calculations_done = False
-                st.rerun()
-        
-        with col2:
-            st.markdown("""
-            <div class="service-card">
-                <h3 class="service-title">Meeting Documentation</h3>
-                <p class="service-description">Create detailed meeting minutes with client information and investment details.</p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            if st.button("Minutes of Meeting Generator", key="mom_btn"):
-                st.session_state.app_mode = "mom"
-                st.rerun()
-            
-            st.markdown("""
-            <div class="service-card">
-                <h3 class="service-title">Meeting Preparation</h3>
-                <p class="service-description">Customizable pre-meeting checklists to ensure comprehensive client discussions.</p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            if st.button("Meeting Checklist Generator", key="checklist_btn"):
-                st.session_state.app_mode = "checklist"
-                st.rerun()
     
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -908,38 +848,27 @@ def show_financial_goal_planner():
     # Client Information Section
     st.markdown('<div class="info-card"><h3>👤 Client Information</h3></div>', unsafe_allow_html=True)
     
-    if st.session_state['is_mobile']:
+    col1, col2 = st.columns(2)
+    with col1:
         client_name = st.text_input("Client Name (Mr./Ms.)", placeholder="Enter client name")
         current_age = st.number_input("Current Age", min_value=18, max_value=80, value=30)
+    
+    with col2:
         date_field = st.text_input("Date", value=datetime.now().strftime("%d-%m-%Y"))
         risk_profile = st.selectbox("Risk Profile", ["Conservative", "Moderate", "Aggressive"])
-    else:
-        col1, col2 = st.columns(2)
-        with col1:
-            client_name = st.text_input("Client Name (Mr./Ms.)", placeholder="Enter client name")
-            current_age = st.number_input("Current Age", min_value=18, max_value=80, value=30)
-        with col2:
-            date_field = st.text_input("Date", value=datetime.now().strftime("%d-%m-%Y"))
-            risk_profile = st.selectbox("Risk Profile", ["Conservative", "Moderate", "Aggressive"])
     
     # GOAL SELECTION SECTION
     st.markdown('<div class="info-card"><h3>Select Goals to Calculate</h3></div>', unsafe_allow_html=True)
     
-    if st.session_state['is_mobile']:
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
         include_education = st.checkbox("🎓 Education Goal", value=True)
+    with col2:
         include_marriage = st.checkbox("💍 Marriage/Business Goal", value=True)
+    with col3:
         include_emergency = st.checkbox("🚨 Emergency Corpus", value=True)
+    with col4:
         include_retirement = st.checkbox("🏖️ Retirement Corpus", value=True)
-    else:
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            include_education = st.checkbox("🎓 Education Goal", value=True)
-        with col2:
-            include_marriage = st.checkbox("💍 Marriage/Business Goal", value=True)
-        with col3:
-            include_emergency = st.checkbox("🚨 Emergency Corpus", value=True)
-        with col4:
-            include_retirement = st.checkbox("🏖️ Retirement Corpus", value=True)
     
     # Financial Goals Configuration (Only show selected goals)
     st.markdown('<div class="info-card"><h3>🎯 Financial Goals Configuration</h3></div>', unsafe_allow_html=True)
@@ -947,85 +876,58 @@ def show_financial_goal_planner():
     # Education Goal (only if selected)
     if include_education:
         with st.expander("🎓 Education Goal", expanded=False):
-            if st.session_state['is_mobile']:
+            col1, col2, col3 = st.columns(3)
+            with col1:
                 edu_goal_name = st.text_input("Goal Name", value="Child Education", key="edu_goal_name")
                 edu_current_age = st.number_input("Child's Current Age", min_value=0, max_value=25, value=5, key="edu_current_age")
+            with col2:
                 edu_target_age = st.number_input("Age when goal is needed", min_value=1, max_value=30, value=18, key="edu_target_age")
                 edu_current_cost = st.number_input("Current Cost of Education (Rs.)", min_value=0, value=500000, key="edu_current_cost")
+            with col3:
                 edu_inflation = st.number_input("Education Inflation (%)", min_value=0.0, max_value=20.0, value=8.0, key="edu_inflation")
                 edu_return = st.number_input("Expected Return (%)", min_value=0.0, max_value=30.0, value=12.0, key="edu_return")
-            else:
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    edu_goal_name = st.text_input("Goal Name", value="Child Education", key="edu_goal_name")
-                    edu_current_age = st.number_input("Child's Current Age", min_value=0, max_value=25, value=5, key="edu_current_age")
-                with col2:
-                    edu_target_age = st.number_input("Age when goal is needed", min_value=1, max_value=30, value=18, key="edu_target_age")
-                    edu_current_cost = st.number_input("Current Cost of Education (Rs.)", min_value=0, value=500000, key="edu_current_cost")
-                with col3:
-                    edu_inflation = st.number_input("Education Inflation (%)", min_value=0.0, max_value=20.0, value=8.0, key="edu_inflation")
-                    edu_return = st.number_input("Expected Return (%)", min_value=0.0, max_value=30.0, value=12.0, key="edu_return")
             
             edu_already_saved = st.number_input("Amount Already Saved for this Goal (Rs.)", min_value=0, value=0, key="edu_already_saved")
     
     # Marriage Goal (only if selected)
     if include_marriage:
         with st.expander("💍 Marriage/Business Goal", expanded=False):
-            if st.session_state['is_mobile']:
+            col1, col2, col3 = st.columns(3)
+            with col1:
                 marriage_goal_name = st.text_input("Goal Name", value="Marriage/Business", key="marriage_goal_name")
                 marriage_target_age = st.number_input("Age when goal is needed", min_value=18, max_value=80, value=31, key="marriage_target_age")
+            with col2:
                 marriage_amount = st.number_input("Target Amount (Rs.)", min_value=0, value=2000000, key="marriage_amount")
                 marriage_inflation = st.number_input("Inflation (%)", min_value=0.0, max_value=20.0, value=6.0, key="marriage_inflation")
+            with col3:
                 marriage_return = st.number_input("Expected Return (%)", min_value=0.0, max_value=30.0, value=10.0, key="marriage_return")
-            else:
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    marriage_goal_name = st.text_input("Goal Name", value="Marriage/Business", key="marriage_goal_name")
-                    marriage_target_age = st.number_input("Age when goal is needed", min_value=18, max_value=80, value=31, key="marriage_target_age")
-                with col2:
-                    marriage_amount = st.number_input("Target Amount (Rs.)", min_value=0, value=2000000, key="marriage_amount")
-                    marriage_inflation = st.number_input("Inflation (%)", min_value=0.0, max_value=20.0, value=6.0, key="marriage_inflation")
-                with col3:
-                    marriage_return = st.number_input("Expected Return (%)", min_value=0.0, max_value=30.0, value=10.0, key="marriage_return")
             
             marriage_already_saved = st.number_input("Amount Already Saved for this Goal (Rs.)", min_value=0, value=0, key="marriage_already_saved")
     
     # Emergency Goal (only if selected)
     if include_emergency:
         with st.expander("🚨 Emergency Corpus", expanded=False):
-            if st.session_state['is_mobile']:
+            col1, col2 = st.columns(2)
+            with col1:
                 emergency_months = st.number_input("Emergency Fund (Months of expenses)", min_value=3, max_value=24, value=6, key="emergency_months")
                 monthly_expenses = st.number_input("Current Monthly Expenses (Rs.)", min_value=0, value=50000, key="monthly_expenses")
+            with col2:
                 emergency_return = st.number_input("Expected Return (%)", min_value=0.0, max_value=15.0, value=6.0, key="emergency_return")
-            else:
-                col1, col2 = st.columns(2)
-                with col1:
-                    emergency_months = st.number_input("Emergency Fund (Months of expenses)", min_value=3, max_value=24, value=6, key="emergency_months")
-                    monthly_expenses = st.number_input("Current Monthly Expenses (Rs.)", min_value=0, value=50000, key="monthly_expenses")
-                with col2:
-                    emergency_return = st.number_input("Expected Return (%)", min_value=0.0, max_value=15.0, value=6.0, key="emergency_return")
             
             emergency_already_saved = st.number_input("Amount Already Saved for Emergency Fund (Rs.)", min_value=0, value=0, key="emergency_already_saved")
     
     # Retirement Goal (only if selected)
     if include_retirement:
         with st.expander("🏖️ Retirement Corpus", expanded=False):
-            if st.session_state['is_mobile']:
+            col1, col2, col3 = st.columns(3)
+            with col1:
                 retirement_age = st.number_input("Retirement Age", min_value=40, max_value=80, value=60, key="retirement_age")
                 retirement_years = st.number_input("Years in Retirement", min_value=10, max_value=40, value=25, key="retirement_years")
+            with col2:
                 retirement_monthly_exp = st.number_input("Monthly Expenses at Retirement (Rs.)", min_value=0, value=100000, key="retirement_monthly_exp")
                 retirement_inflation = st.number_input("Inflation (%)", min_value=0.0, max_value=15.0, value=6.0, key="retirement_inflation")
+            with col3:
                 retirement_return = st.number_input("Expected Return (%)", min_value=0.0, max_value=20.0, value=8.0, key="retirement_return")
-            else:
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    retirement_age = st.number_input("Retirement Age", min_value=40, max_value=80, value=60, key="retirement_age")
-                    retirement_years = st.number_input("Years in Retirement", min_value=10, max_value=40, value=25, key="retirement_years")
-                with col2:
-                    retirement_monthly_exp = st.number_input("Monthly Expenses at Retirement (Rs.)", min_value=0, value=100000, key="retirement_monthly_exp")
-                    retirement_inflation = st.number_input("Inflation (%)", min_value=0.0, max_value=15.0, value=6.0, key="retirement_inflation")
-                with col3:
-                    retirement_return = st.number_input("Expected Return (%)", min_value=0.0, max_value=20.0, value=8.0, key="retirement_return")
             
             retirement_already_saved = st.number_input("Amount Already Saved for Retirement (Rs.)", min_value=0, value=0, key="retirement_already_saved")
     
@@ -1198,58 +1100,36 @@ def show_financial_goal_planner():
         # Summary Metrics
         st.markdown('<div class="info-card"><h3>Combined Selected Goals Summary</h3></div>', unsafe_allow_html=True)
         
-        if st.session_state['is_mobile']:
+        col1, col2, col3 = st.columns(3)
+        with col1:
             st.markdown(f"""
             <div class="metric-card">
                 <div class="metric-label">Total Monthly SIP Required</div>
                 <div class="metric-value">Rs.{format_indian_number(results['total_sip'])}</div>
             </div>
             """, unsafe_allow_html=True)
-            
+        
+        with col2:
             st.markdown(f"""
             <div class="metric-card">
                 <div class="metric-label">Total Step-up SIP Required</div>
                 <div class="metric-value">Rs.{format_indian_number(results['total_stepup_sip'])}</div>
             </div>
             """, unsafe_allow_html=True)
-            
+        
+        with col3:
             st.markdown(f"""
             <div class="metric-card">
                 <div class="metric-label">Total Lumpsum Required</div>
                 <div class="metric-value">Rs.{format_indian_number(results['total_lumpsum'])}</div>
             </div>
             """, unsafe_allow_html=True)
-        else:
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <div class="metric-label">Total Monthly SIP Required</div>
-                    <div class="metric-value">Rs.{format_indian_number(results['total_sip'])}</div>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col2:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <div class="metric-label">Total Step-up SIP Required</div>
-                    <div class="metric-value">Rs.{format_indian_number(results['total_stepup_sip'])}</div>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col3:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <div class="metric-label">Total Lumpsum Required</div>
-                    <div class="metric-value">Rs.{format_indian_number(results['total_lumpsum'])}</div>
-                </div>
-                """, unsafe_allow_html=True)
         
         # Progress Visualization for selected goals
         if results['calculated_goals']:
             st.markdown('<div class="calculation-card"><h3>Selected Goals Progress</h3></div>', unsafe_allow_html=True)
             
-            fig, ax = plt.subplots(figsize=(12, 6) if not st.session_state['is_mobile'] else (6, 6))  # Smaller on mobile
+            fig, ax = plt.subplots(figsize=(12, 6))
             goal_names = [goal['Goal'] for goal in results['calculated_goals']]
             progress_values = [goal['Progress'] for goal in results['calculated_goals']]
             
@@ -1366,6 +1246,7 @@ def show_financial_goal_planner():
                         elements.append(goal_table) 
                         elements.append(Spacer(1, 20))
 
+                    
                     # Investment Summary Section
                     elements.append(Paragraph("Investment Summary", subheading_style))
                     elements.append(Paragraph(f"<b>Total Monthly SIP Required:</b> Rs.{format_indian_number(results['total_sip'])}", client_style))
@@ -1482,10 +1363,14 @@ def show_investment_sheet():
     tab1, tab2, tab3 = st.tabs(["📋 Client Details", "💼 Portfolio Configuration", "📄 Generate PDF"])
     
     with tab1:
-        if st.session_state['is_mobile']:
+        col1, col2 = st.columns(2)
+        
+        with col1:
             client_name = st.text_input("Client Name", placeholder="Enter client full name")
             report_date = st.text_input("Report Date", value=datetime.now().strftime("%d-%m-%Y"))
             financial_goal = st.text_input("Financial Goal", placeholder="e.g., Wealth Creation, Retirement Planning")
+            
+        with col2:
             investment_horizon = st.selectbox("Investment Horizon", ["Short Term (< 3 years)", "Medium Term (3-7 years)", "Long Term (> 7 years)"])
             risk_profile = st.selectbox("Risk Profile", ["Conservative", "Moderate", "Aggressive"])
             
@@ -1498,38 +1383,14 @@ def show_investment_sheet():
                 default_return = "8-10%"
                 
             return_expectation = st.text_input("Expected Returns", value=default_return)
-            st.markdown("**Investment Amount**")
-            investment_amount = st.text_input("Lumpsum Investment (Rs.)", placeholder="0")
-            sip_amount = st.text_input("Monthly SIP Amount (Rs.)", placeholder="0")
-        else:
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                client_name = st.text_input("Client Name", placeholder="Enter client full name")
-                report_date = st.text_input("Report Date", value=datetime.now().strftime("%d-%m-%Y"))
-                financial_goal = st.text_input("Financial Goal", placeholder="e.g., Wealth Creation, Retirement Planning")
-                
-            with col2:
-                investment_horizon = st.selectbox("Investment Horizon", ["Short Term (< 3 years)", "Medium Term (3-7 years)", "Long Term (> 7 years)"])
-                risk_profile = st.selectbox("Risk Profile", ["Conservative", "Moderate", "Aggressive"])
-                
-                default_return = ""
-                if risk_profile == "Aggressive":
-                    default_return = "12-15%"
-                elif risk_profile == "Moderate":
-                    default_return = "10-12%"
-                elif risk_profile == "Conservative":
-                    default_return = "8-10%"
-                    
-                return_expectation = st.text_input("Expected Returns", value=default_return)
 
-            st.markdown("**Investment Amount**")
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                investment_amount = st.text_input("Lumpsum Investment (Rs.)", placeholder="0")
-            with col2:
-                sip_amount = st.text_input("Monthly SIP Amount (Rs.)", placeholder="0")
+        st.markdown("**Investment Amount**")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            investment_amount = st.text_input("Lumpsum Investment (Rs.)", placeholder="0")
+        with col2:
+            sip_amount = st.text_input("Monthly SIP Amount (Rs.)", placeholder="0")
         
         include_strategy_note = st.checkbox("Include Investment Strategy Description")
         if include_strategy_note:
@@ -1544,23 +1405,16 @@ This is an important point to note.""",
     with tab2:
         st.markdown("**Select Tables to Include**")
         
-        if st.session_state['is_mobile']:
+        col1, col2 = st.columns(2)
+        
+        with col1:
             include_lumpsum = st.checkbox("Lumpsum Allocation")
             include_sip = st.checkbox("SIP Allocation")
             include_fund_perf = st.checkbox("Fund Performance Analysis")
+            
+        with col2:
             include_initial_stp = st.checkbox("Initial Investment (STP Clients)")
             include_final_stp = st.checkbox("Final Portfolio (Post STP)")
-        else:
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                include_lumpsum = st.checkbox("Lumpsum Allocation")
-                include_sip = st.checkbox("SIP Allocation")
-                include_fund_perf = st.checkbox("Fund Performance Analysis")
-                
-            with col2:
-                include_initial_stp = st.checkbox("Initial Investment (STP Clients)")
-                include_final_stp = st.checkbox("Final Portfolio (Post STP)")
 
         lumpsum_alloc = None
         if include_lumpsum:
@@ -1596,7 +1450,7 @@ This is an important point to note.""",
 
         st.markdown("**Fund Factsheets**")
         factsheet_links = st.text_area("Factsheet Links", 
-                                       placeholder="Format: Fund Name - Description | https://link.com\nOne line per line",
+                                       placeholder="Format: Fund Name - Description | https://link.com\nOne link per line",
                                        height=80)
 
     with tab3:
@@ -1607,7 +1461,8 @@ This is an important point to note.""",
         else:
             st.success(f"Ready to generate PDF for: **{client_name}**")
             
-            if st.session_state['is_mobile']:
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
                 if st.button("📄 Download Investment Sheet PDF", type="primary", use_container_width=True):
                     if not client_name.strip() or not report_date.strip():
                         st.error("Please enter both Client Name and Report Date.")
@@ -1667,6 +1522,7 @@ This is an important point to note.""",
                                         investment_summary_parts.append(f"Rs.{formatted_sip} (SIP)")
                                     except:
                                         investment_summary_parts.append(f"Rs.{sip_amount} (SIP)")
+
                                 if investment_summary_parts:
                                     elements.append(Paragraph(f"<b>Investment Amount:</b> {', '.join(investment_summary_parts)}", client_style))
                                 
@@ -1780,23 +1636,6 @@ This is an important point to note.""",
                                 file_name=f"Investment_Sheet_{client_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf",
                                 mime="application/pdf"
                             )
-            else:
-                col1, col2, col3 = st.columns([1, 2, 1])
-                with col2:
-                    if st.button("📄 Download Investment Sheet PDF", type="primary", use_container_width=True):
-                        if not client_name.strip() or not report_date.strip():
-                            st.error("Please enter both Client Name and Report Date.")
-                        else:
-                            with st.spinner("Generating Investment Sheet..."):
-                                # The generate_investment_pdf function as above
-                                pdf = generate_investment_pdf()
-                                st.success("Investment Sheet PDF generated successfully!")
-                                st.download_button(
-                                    label="Download Investment Sheet PDF",
-                                    data=pdf,
-                                    file_name=f"Investment_Sheet_{client_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf",
-                                    mime="application/pdf"
-                                )
     
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1820,38 +1659,27 @@ def show_minutes_of_meeting():
     # Meeting Details
     st.markdown('<div class="info-card"><h3>📅 Meeting Information</h3></div>', unsafe_allow_html=True)
     
-    if st.session_state['is_mobile']:
+    col1, col2 = st.columns(2)
+    with col1:
         meeting_organizer = st.text_input("Meeting Organizer", value="Mr. Puneet Kohli")
         meeting_date_time = st.text_input("Meeting Date & Time")
+        
+    with col2:
         meeting_location = st.text_input("Meeting Location")
         minutes_drafted_date = st.text_input("Minutes Drafted Date")
-    else:
-        col1, col2 = st.columns(2)
-        with col1:
-            meeting_organizer = st.text_input("Meeting Organizer", value="Mr. Puneet Kohli")
-            meeting_date_time = st.text_input("Meeting Date & Time")
-        with col2:
-            meeting_location = st.text_input("Meeting Location")
-            minutes_drafted_date = st.text_input("Minutes Drafted Date")
     
     # Investment Profile
     st.markdown('<div class="info-card"><h3>💼 Investment Profile</h3></div>', unsafe_allow_html=True)
     
-    if st.session_state['is_mobile']:
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
         investment_horizon = st.selectbox("Investment Horizon", ["Short Term", "Medium Term", "Long Term"])
+    with col2:
         risk_profile = st.selectbox("Risk Profile", ["Conservative", "Moderate", "Aggressive"])
+    with col3:
         return_expectation = st.text_input("Return Expectation", value="8% - 10% CAGR")
+    with col4:
         awareness_level = st.selectbox("Awareness level", ["LOW", "MEDIUM", "HIGH"])
-    else:
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            investment_horizon = st.selectbox("Investment Horizon", ["Short Term", "Medium Term", "Long Term"])
-        with col2:
-            risk_profile = st.selectbox("Risk Profile", ["Conservative", "Moderate", "Aggressive"])
-        with col3:
-            return_expectation = st.text_input("Return Expectation", value="8% - 10% CAGR")
-        with col4:
-            awareness_level = st.selectbox("Awareness level", ["LOW", "MEDIUM", "HIGH"])
     
     # Brief Description/Agenda
     st.markdown('<div class="info-card"><h3>📋 Brief Description/Agenda</h3></div>', unsafe_allow_html=True)
@@ -2006,6 +1834,7 @@ def show_minutes_of_meeting():
                     elements.append(Paragraph(profile_text, centered_profile_style))
                     
                     elements.append(Paragraph("<b>Brief Description/Agenda</b>", section_heading_style))
+                    
                     agenda_table_data = [[Paragraph(agenda_items.replace('\n', '<br/>'), normal_style)]]
                     agenda_table = Table(agenda_table_data, colWidths=[16*cm])
                     agenda_table.setStyle(TableStyle([
@@ -2212,21 +2041,15 @@ def show_meeting_checklist():
     tab1, tab2, tab3 = st.tabs(["📋 Meeting Info", "✅ Checklist Items", "📄 Generate PDF"])
     
     with tab1:
-        if st.session_state['is_mobile']:
+        col1, col2 = st.columns(2)
+        
+        with col1:
             client_name_checklist = st.text_input("Client Name", placeholder="Enter client name")
             meeting_date_checklist = st.text_input("Meeting Date", placeholder="DD-MM-YYYY")
+            
+        with col2:
             meeting_time_checklist = st.text_input("Meeting Time", placeholder="HH:MM AM/PM")
             meeting_location_checklist = st.text_input("Meeting Location", placeholder="Enter location")
-        else:
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                client_name_checklist = st.text_input("Client Name", placeholder="Enter client name")
-                meeting_date_checklist = st.text_input("Meeting Date", placeholder="DD-MM-YYYY")
-                
-            with col2:
-                meeting_time_checklist = st.text_input("Meeting Time", placeholder="HH:MM AM/PM")
-                meeting_location_checklist = st.text_input("Meeting Location", placeholder="Enter location")
     
     with tab2:
         # Initialize session state
@@ -2235,32 +2058,22 @@ def show_meeting_checklist():
         
         st.markdown("**Select Checklist Items**")
         
-        if st.session_state['is_mobile']:
+        # Quick select buttons
+        col1, col2, col3 = st.columns(3)
+        with col1:
             if st.button("Select All", use_container_width=True):
                 st.session_state.selected_checklist_items = default_checklist_items.copy()
                 st.rerun()
+        
+        with col2:
             if st.button("Clear All", use_container_width=True):
                 st.session_state.selected_checklist_items = []
                 st.rerun()
+        
+        with col3:
             if st.button("Select Top 10", use_container_width=True):
                 st.session_state.selected_checklist_items = default_checklist_items[:10]
                 st.rerun()
-        else:
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                if st.button("Select All", use_container_width=True):
-                    st.session_state.selected_checklist_items = default_checklist_items.copy()
-                    st.rerun()
-            
-            with col2:
-                if st.button("Clear All", use_container_width=True):
-                    st.session_state.selected_checklist_items = []
-                    st.rerun()
-            
-            with col3:
-                if st.button("Select Top 10", use_container_width=True):
-                    st.session_state.selected_checklist_items = default_checklist_items[:10]
-                    st.rerun()
         
         st.markdown("---")
         
@@ -2303,7 +2116,8 @@ def show_meeting_checklist():
                 for idx, item in enumerate(st.session_state.selected_checklist_items, 1):
                     st.write(f"{idx}. {item}")
             
-            if st.session_state['is_mobile']:
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
                 if st.button("📄 Download Meeting Checklist PDF", type="primary", use_container_width=True):
                     with st.spinner("Generating Meeting Checklist..."):
                         def generate_meeting_checklist_pdf():
@@ -2417,19 +2231,6 @@ def show_meeting_checklist():
                             file_name=f"Meeting_Checklist_{client_name_checklist.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf",
                             mime="application/pdf"
                         )
-            else:
-                col1, col2, col3 = st.columns([1, 2, 1])
-                with col2:
-                    if st.button("📄 Download Meeting Checklist PDF", type="primary", use_container_width=True):
-                        with st.spinner("Generating Meeting Checklist..."):
-                            pdf = generate_meeting_checklist_pdf()
-                            st.success("Meeting Checklist PDF generated successfully!")
-                            st.download_button(
-                                label="Download Meeting Checklist PDF",
-                                data=pdf,
-                                file_name=f"Meeting_Checklist_{client_name_checklist.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf",
-                                mime="application/pdf"
-                            )
     
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -2448,4 +2249,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
