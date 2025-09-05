@@ -19,8 +19,8 @@ import numpy as np
 import math
 
 # Static assets
-LOGO = "D:\Sahayak essentials\Investment Sheet\static\logo.png"
-FOOTER = "D:\Sahayak essentials\Investment Sheet\static\footer.png"
+LOGO = "logo.png"
+FOOTER = "footer.png"
 
 st.set_page_config(
     page_title="Sahayak Associates | Document Generator", 
@@ -2812,7 +2812,7 @@ def generate_comprehensive_asset_pdf(results, comparison_data, selected_assets):
         fontName=UNICODE_FONT
     )
     
-    # Header style for table with word wrapping
+    # Table styles with word wrapping
     header_cell_style = ParagraphStyle(
         name='HeaderCell',
         parent=styles['Normal'],
@@ -2823,7 +2823,6 @@ def generate_comprehensive_asset_pdf(results, comparison_data, selected_assets):
         wordWrap='CJK'
     )
     
-    # Body cell style
     body_cell_style = ParagraphStyle(
         name='BodyCell',
         parent=styles['Normal'],
@@ -2834,20 +2833,19 @@ def generate_comprehensive_asset_pdf(results, comparison_data, selected_assets):
     
     elements = []
     
-    # Title
+    # SECTION 1: Title and Executive Summary
     elements.append(Paragraph("Multi-Asset Class Investment Analysis Report", heading_style))
     elements.append(Paragraph(f"Generated on: {datetime.now().strftime('%d-%m-%Y %H:%M')}", normal_style))
     elements.append(Spacer(1, 20))
     
-    # Executive Summary
     elements.append(Paragraph("Executive Summary", subheading_style))
     elements.append(Paragraph(f"This report analyzes {len(selected_assets)} asset classes: {', '.join(selected_assets)}.", normal_style))
     elements.append(Spacer(1, 15))
     
-    # Asset Comparison Table with FIXED column widths and wrapped headers
+    # SECTION 2: Asset Comparison Table
     elements.append(Paragraph("Asset Class Comparison", subheading_style))
     
-    # Create table with wrapped headers
+    # Build table with proper headers and data
     table_data = []
     
     # Header row with wrapped text
@@ -2872,7 +2870,7 @@ def generate_comprehensive_asset_pdf(results, comparison_data, selected_assets):
             Paragraph(data['Risk Level'], body_cell_style)
         ])
     
-    # FIXED column widths to prevent spill-over
+    # Create table with fixed column widths to prevent overflow
     comparison_table = Table(table_data, colWidths=[2.8*cm, 2.5*cm, 2.5*cm, 2.5*cm, 2.2*cm, 2.5*cm])
     comparison_table.setStyle(TableStyle([
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
@@ -2890,7 +2888,7 @@ def generate_comprehensive_asset_pdf(results, comparison_data, selected_assets):
     elements.append(comparison_table)
     elements.append(Spacer(1, 20))
     
-    # Investment Recommendations
+    # SECTION 3: Investment Recommendations
     elements.append(Paragraph("Investment Recommendations", subheading_style))
     
     best_return = max(comparison_data, key=lambda x: float(x['Expected Return'].replace('%', '')))
@@ -2906,77 +2904,105 @@ def generate_comprehensive_asset_pdf(results, comparison_data, selected_assets):
     
     elements.append(Spacer(1, 20))
     
-    # Important Tax Considerations
+    # SECTION 4: Tax Considerations
     elements.append(Paragraph("Important Tax Considerations", subheading_style))
     elements.append(Paragraph("• <b>Accrual Tax on Fixed Deposits:</b> FD interest is taxed annually, reducing effective compounding returns", normal_style))
     elements.append(Paragraph("• Mutual fund taxes are deferred until redemption (STCG/LTCG applicable)", normal_style))
     elements.append(Paragraph("• Real estate enjoys indexation benefits for LTCG after 2 years", normal_style))
     elements.append(Paragraph("• Gold has LTCG benefits after 3 years of holding", normal_style))
 
-    # Add Charts Section
+    # SECTION 5: Visual Analysis (New Page)
     elements.append(PageBreak())
     elements.append(Paragraph("Visual Analysis", subheading_style))
     
-    # Create matplotlib charts - STACKED VERTICALLY
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))  # Changed from (1, 2) to (2, 1)
+    # Create enhanced matplotlib charts - VERTICALLY STACKED
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
 
-    # Extract data for charts
+    # Extract chart data
     asset_names = [data['Asset Class'] for data in comparison_data]
     current_values = [float(data['Current Value'].replace('Rs.', '').replace(',', '')) for data in comparison_data]
     future_values = [float(data['Future Value'].replace('Rs.', '').replace(',', '')) for data in comparison_data]
     returns = [float(data['Expected Return'].replace('%', '')) for data in comparison_data]
 
-    # Chart 1: Current vs Future Value (TOP)
-    x = range(len(asset_names))
-    width = 0.35
+    # Define attractive color palettes
+    current_colors = ['#3498db', '#e74c3c', '#f39c12', '#9b59b6'][:len(asset_names)]
+    future_colors = ['#5dade2', '#ec7063', '#f8c471', '#bb8fce'][:len(asset_names)]
+    return_colors = ['#e8f8f5', '#fdedec', '#fef9e7', '#f4ecf7'][:len(asset_names)]
+    return_edge_colors = ['#27ae60', '#e74c3c', '#f39c12', '#8e44ad'][:len(asset_names)]
 
-    ax1.bar([i - width/2 for i in x], current_values, width, label='Current Value', 
-            color='#4facfe', alpha=0.8)
-    ax1.bar([i + width/2 for i in x], future_values, width, label='Future Value', 
-            color='#00f2fe', alpha=0.8)
+    # Chart 1: Current vs Future Value (Enhanced horizontal bars)
+    y_pos = range(len(asset_names))
+    bar_height = 0.35
 
-    ax1.set_xlabel('Asset Classes')
-    ax1.set_ylabel('Value (Rs.)')
-    ax1.set_title('Current vs Future Value Comparison', fontweight='bold', fontsize=12)
-    ax1.set_xticks(x)
-    ax1.set_xticklabels(asset_names, rotation=45, ha='right')
-    ax1.legend()
-    ax1.grid(True, alpha=0.3, axis='y')
+    # Create horizontal bars
+    current_bars = ax1.barh([i - bar_height/2 for i in y_pos], current_values, 
+                           bar_height, label='Current Value', 
+                           color=current_colors, alpha=0.8, edgecolor='black', linewidth=1)
 
-    # Chart 2: Expected Returns (BOTTOM)
-    colors_list = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'][:len(asset_names)]
-
-    bars = ax2.bar(asset_names, returns, color=colors_list, alpha=0.8)
-    ax2.set_xlabel('Asset Classes')
-    ax2.set_ylabel('Expected Return (%)')
-    ax2.set_title('Expected Annual Returns', fontweight='bold', fontsize=12)
-    ax2.set_xticklabels(asset_names, rotation=45, ha='right')
-    ax2.grid(True, alpha=0.3, axis='y')
+    future_bars = ax1.barh([i + bar_height/2 for i in y_pos], future_values, 
+                          bar_height, label='Future Value', 
+                          color=future_colors, alpha=0.8, edgecolor='black', linewidth=1)
 
     # Add value labels on bars
+    for i, (cv, fv) in enumerate(zip(current_values, future_values)):
+        ax1.text(cv + max(current_values) * 0.02, i - bar_height/2, 
+                 f'₹{cv:,.0f}', va='center', ha='left', fontweight='bold', fontsize=9)
+        ax1.text(fv + max(future_values) * 0.02, i + bar_height/2, 
+                 f'₹{fv:,.0f}', va='center', ha='left', fontweight='bold', fontsize=9)
+
+    ax1.set_yticks(y_pos)
+    ax1.set_yticklabels(asset_names, fontweight='bold', fontsize=10)
+    ax1.invert_yaxis()
+    ax1.set_xlabel('Value (Rs.)', fontweight='bold', fontsize=11)
+    ax1.set_title('Current vs Future Value Comparison', fontweight='bold', fontsize=14, pad=20)
+    ax1.legend(loc='lower right', framealpha=0.9)
+    ax1.grid(axis='x', linestyle='--', alpha=0.7)
+    ax1.spines['top'].set_visible(False)
+    ax1.spines['right'].set_visible(False)
+
+    # Chart 2: Expected Returns (Enhanced vertical bars)
+    bars = ax2.bar(asset_names, returns, 
+                   color=return_colors, 
+                   edgecolor=return_edge_colors, 
+                   linewidth=2, 
+                   alpha=0.9)
+
+    # Add value labels on top of bars
     for bar, value in zip(bars, returns):
-        ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.1, 
-                f'{value:.1f}%', ha='center', va='bottom', fontweight='bold')
+        height = bar.get_height()
+        ax2.text(bar.get_x() + bar.get_width()/2, height + 0.1, 
+                 f'{value:.1f}%', ha='center', va='bottom', fontweight='bold', fontsize=10)
 
-    plt.tight_layout()  # Important for vertical stacking
+    ax2.set_ylabel('Expected Return (%)', fontweight='bold', fontsize=11)
+    ax2.set_title('Expected Annual Returns', fontweight='bold', fontsize=14, pad=20)
+    ax2.set_xticklabels(asset_names, rotation=45, ha='right', fontweight='bold')
+    ax2.grid(axis='y', linestyle='--', alpha=0.7)
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['right'].set_visible(False)
+    ax2.set_ylim(0, max(returns) * 1.2)
 
-    # Save chart to buffer and add to PDF
+    # Professional styling
+    fig.patch.set_facecolor('#fafafa')
+    ax1.set_facecolor('#ffffff')
+    ax2.set_facecolor('#ffffff')
+
+    plt.tight_layout(pad=3.0)
+
+    # Save chart to buffer
     chart_buffer = BytesIO()
-    plt.savefig(chart_buffer, format='png', bbox_inches='tight', dpi=300)
+    plt.savefig(chart_buffer, format='png', bbox_inches='tight', dpi=300, 
+                facecolor='#fafafa', edgecolor='none')
     plt.close(fig)
     chart_buffer.seek(0)
 
-    # Insert chart into PDF with adjusted dimensions
-    chart_image = Image(chart_buffer, width=14*cm, height=12*cm)  # Adjusted height for vertical layout
+    # Insert enhanced chart into PDF
+    chart_image = Image(chart_buffer, width=15*cm, height=12*cm)
     elements.append(chart_image)
     elements.append(Spacer(1, 20))
-
     
-    
-    # Page break before disclaimer
+    # SECTION 6: Disclaimer (New Page)
     elements.append(PageBreak())
     
-    # Disclaimer
     elements.append(Spacer(1, 30))
     elements.append(Paragraph("DISCLAIMER", ParagraphStyle(
         name='DisclaimerHeading', 
@@ -2995,17 +3021,18 @@ def generate_comprehensive_asset_pdf(results, comparison_data, selected_assets):
         fontName=UNICODE_FONT
     )
     
-    # Add special note about FD accrual tax
+    # Special note about FD accrual tax
     elements.append(Paragraph("*Important: Fixed Deposit (FD) interest is subject to annual accrual tax which reduces compounding returns. This means tax is deducted yearly on interest earned, significantly impacting the final maturity amount compared to investments where tax is deferred until redemption.", disclaimer_style))
     elements.append(Spacer(1, 10))
     
+    # Standard disclaimer
     disclaimer_paragraphs = [p.strip() for p in DISCLAIMER_TEXT.split('.') if p.strip()]
     for paragraph in disclaimer_paragraphs:
         if paragraph:
             elements.append(Paragraph(paragraph + ".", disclaimer_style))
             elements.append(Spacer(1, 3))
     
-    # Build PDF with consistent header and footer
+    # Build PDF with header/footer that supports footer.png
     doc = SimpleDocTemplate(buffer, pagesize=A4, 
                           rightMargin=cm, leftMargin=cm, 
                           topMargin=5*cm, bottomMargin=3*cm)
@@ -3013,7 +3040,8 @@ def generate_comprehensive_asset_pdf(results, comparison_data, selected_assets):
              onLaterPages=header_footer_with_logos)
     
     buffer.seek(0)
-    
+
+    # Streamlit download interface
     st.success("Asset Comparison Report generated successfully!")
     st.download_button(
         label="✅ Download Asset Comparison Report PDF",
@@ -3023,6 +3051,7 @@ def generate_comprehensive_asset_pdf(results, comparison_data, selected_assets):
         use_container_width=True
     )
 
+    return buffer
 
 
 # --- Main App Logic ---
