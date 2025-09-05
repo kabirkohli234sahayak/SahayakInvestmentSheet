@@ -19,8 +19,8 @@ import numpy as np
 import math
 
 # Static assets
-LOGO = "logo.png"
-FOOTER = "footer.png"
+LOGO = "D:\Sahayak essentials\Investment Sheet\static\logo.png"
+FOOTER = "D:\Sahayak essentials\Investment Sheet\static\footer.png"
 
 st.set_page_config(
     page_title="Sahayak Associates | Document Generator", 
@@ -787,7 +787,19 @@ def show_main_screen():
             st.session_state.app_mode = "goal_planner"
             st.session_state.calculations_done = False
             st.rerun()
-    
+        
+        # NEW MODULE - Add this card
+        st.markdown("""
+        <div class="service-card">
+            <h3 class="service-title">Investment Decision Analysis</h3>
+            <p class="service-description">Real-time comparison across asset classes (MF, Real Estate, Gold, FD) to make informed investment decisions.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("Multi-Asset Decision Analyzer", key="decision_btn"):
+            st.session_state.app_mode = "decision_analyzer"
+            st.rerun()
+
     with col2:
         st.markdown("""
         <div class="service-card">
@@ -821,6 +833,8 @@ def show_main_screen():
     """, unsafe_allow_html=True)
     
     st.markdown('</div>', unsafe_allow_html=True)
+
+
 
 # --- 1. Financial Goal Planner (COMPLETE) ---
 def show_financial_goal_planner():
@@ -2234,6 +2248,783 @@ def show_meeting_checklist():
     
     st.markdown('</div>', unsafe_allow_html=True)
 
+# --- 5. Multi-Asset Class Decision Analyzer ---
+# --- 5. Multi-Asset Class Decision Analyzer ---
+def show_asset_decision_analyzer():
+    st.markdown('<div class="main-container">', unsafe_allow_html=True)
+    
+    show_header()
+    show_back_button("back_decision_analyzer")
+    
+    st.markdown("""
+    <div class="goal-section">
+        <h2>Multi-Asset Class Decision Analyzer</h2>
+        <p>Real-time comparison across major asset classes to make informed investment decisions</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Initialize session state for this module
+    if 'asset_analysis_results' not in st.session_state:
+        st.session_state.asset_analysis_results = {}
+    
+    tab1, tab2, tab3, tab4 = st.tabs(["🎯 Select Assets", "📊 Portfolio Input", "⚙️ Parameters", "📈 Analysis"])
+    
+    with tab1:
+        st.markdown('### Select Asset Classes to Compare')
+        st.markdown('<div class="info-card"><p>Choose the asset classes you want to compare for your investment decision</p></div>', unsafe_allow_html=True)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            include_mutual_funds = st.checkbox("📊 Mutual Funds", value=True, help="Equity, Debt, Hybrid mutual funds")
+        with col2:
+            include_real_estate = st.checkbox("🏠 Real Estate", help="Property investments, REITs")
+        with col3:
+            include_gold = st.checkbox("🥇 Gold", help="Physical gold, Gold ETFs, Digital gold")
+        with col4:
+            include_fd = st.checkbox("🏦 Fixed Deposits", help="Bank FDs, Corporate FDs with accrual tax")
+    
+    with tab2:
+        st.markdown('### Current Portfolio Details')
+        
+        # Mutual Funds Section
+        if include_mutual_funds:
+            with st.expander("📊 Mutual Fund Portfolio", expanded=True):
+                st.markdown("**Current Mutual Fund Holdings**")
+                
+                # Initialize MF data in session state
+                if 'mf_schemes' not in st.session_state:
+                    st.session_state.mf_schemes = pd.DataFrame({
+                        'Scheme Name': [''],
+                        'Category': ['Equity Large Cap'],
+                        'Invested Amount (Rs.)': [0],
+                        'Current Value (Rs.)': [0],
+                        'Investment Date': [datetime.now().date()],
+                        'Monthly SIP (Rs.)': [0]
+                    })
+                
+                # Editable MF schemes table
+                edited_mf = st.data_editor(
+                    st.session_state.mf_schemes,
+                    num_rows="dynamic",
+                    use_container_width=True,
+                    column_config={
+                        "Category": st.column_config.SelectboxColumn(
+                            "Category",
+                            options=["Equity Large Cap", "Equity Mid Cap", "Equity Small Cap", 
+                                   "Debt Fund", "Hybrid Fund", "ELSS"],
+                            required=True
+                        ),
+                        "Invested Amount (Rs.)": st.column_config.NumberColumn(
+                            "Invested Amount (Rs.)", min_value=0, step=1000, format="%d"
+                        ),
+                        "Current Value (Rs.)": st.column_config.NumberColumn(
+                            "Current Value (Rs.)", min_value=0, step=1000, format="%d"
+                        ),
+                        "Investment Date": st.column_config.DateColumn("Investment Date"),
+                        "Monthly SIP (Rs.)": st.column_config.NumberColumn(
+                            "Monthly SIP (Rs.)", min_value=0, step=500, format="%d"
+                        )
+                    },
+                    hide_index=True
+                )
+                st.session_state.mf_schemes = edited_mf
+        
+        # Real Estate Section
+        if include_real_estate:
+            with st.expander("🏠 Real Estate Portfolio", expanded=False):
+                col1, col2 = st.columns(2)
+                with col1:
+                    property_purchase_value = st.number_input("Property Purchase Value (Rs.)", min_value=0, value=0, key="prop_purchase")
+                    property_current_value = st.number_input("Current Market Value (Rs.)", min_value=0, value=0, key="prop_current")
+                    property_purchase_date = st.date_input("Purchase Date", key="prop_date")
+                with col2:
+                    rental_income_monthly = st.number_input("Monthly Rental Income (Rs.)", min_value=0, value=0, key="rental_income")
+                    property_type = st.selectbox("Property Type", ["Residential", "Commercial", "REIT"], key="prop_type")
+                    maintenance_cost_annual = st.number_input("Annual Maintenance Cost (Rs.)", min_value=0, value=0, key="maintenance")
+        
+        # Gold Section
+        if include_gold:
+            with st.expander("🥇 Gold Investment", expanded=False):
+                col1, col2 = st.columns(2)
+                with col1:
+                    gold_investment_type = st.selectbox("Gold Investment Type", 
+                                                      ["Physical Gold", "Gold ETF", "Digital Gold"], key="gold_type")
+                    gold_purchase_price = st.number_input("Purchase Price per gram (Rs.)", min_value=0.0, value=0.0, key="gold_purchase_price")
+                    gold_quantity = st.number_input("Quantity (grams)", min_value=0.0, value=0.0, key="gold_qty")
+                with col2:
+                    gold_current_price = st.number_input("Current Gold Price per gram (Rs.)", min_value=0.0, value=6500.0, key="gold_current_price")
+                    gold_purchase_date = st.date_input("Purchase Date", key="gold_date")
+                    storage_cost_annual = st.number_input("Annual Storage/Management Cost (Rs.)", min_value=0, value=0, key="gold_storage")
+        
+        # Fixed Deposits Section
+        if include_fd:
+            with st.expander("🏦 Fixed Deposit Options", expanded=False):
+                st.info("💡 **Accrual Tax Impact**: Unlike mutual funds where tax is paid only on redemption, FD interest is taxed every year, reducing the effective compounding benefit.")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    fd_amount = st.number_input("Amount to Invest in FD (Rs.)", min_value=0, value=0, key="fd_amount")
+                    fd_rate = st.number_input("FD Interest Rate (% per annum)", min_value=0.0, max_value=15.0, value=7.5, step=0.25, key="fd_rate",
+                                            help="Interest rate per annum. Note: FD interest is subject to annual accrual tax, which means tax is deducted yearly on interest earned, reducing effective compounded returns.")
+                with col2:
+                    fd_tenure = st.number_input("FD Tenure (Years)", min_value=1, max_value=10, value=3, key="fd_tenure")
+                    fd_type = st.selectbox("FD Type", ["Regular FD", "Tax Saving FD", "Senior Citizen FD"], key="fd_type")
+    
+    with tab3:
+        st.markdown('### Analysis Parameters')
+        st.markdown('<div class="info-card"><p>Set your investment preferences and tax details for accurate comparison</p></div>', unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            investment_horizon = st.selectbox("Investment Horizon", 
+                                            ["1 Year", "3 Years", "5 Years", "10 Years"], 
+                                            index=2, key="horizon")
+            current_age = st.number_input("Your Current Age", min_value=18, max_value=80, value=35, key="client_age")
+        
+        with col2:
+            tax_bracket = st.selectbox("Tax Bracket", 
+                                     ["5%", "20%", "30%"], 
+                                     index=2, key="tax_bracket")
+            inflation_rate = st.number_input("Expected Inflation Rate (%)", min_value=0.0, max_value=15.0, value=6.0, step=0.5, key="inflation")
+        
+        with col3:
+            risk_tolerance = st.selectbox("Risk Tolerance", 
+                                        ["Conservative", "Moderate", "Aggressive"], 
+                                        index=1, key="risk_tolerance")
+            liquidity_need = st.selectbox("Liquidity Requirement", 
+                                        ["High", "Medium", "Low"], 
+                                        index=1, key="liquidity")
+    
+    with tab4:
+        st.markdown('### Investment Decision Analysis')
+        
+        # Check if at least one asset class is selected
+        selected_assets = []
+        if include_mutual_funds:
+            selected_assets.append("Mutual Funds")
+        if include_real_estate:
+            selected_assets.append("Real Estate")
+        if include_gold:
+            selected_assets.append("Gold")
+        if include_fd:
+            selected_assets.append("Fixed Deposits")
+        
+        if not selected_assets:
+            st.warning("Please select at least one asset class to compare.")
+        else:
+            st.info(f"Selected for comparison: {', '.join(selected_assets)}")
+            
+            st.markdown('<div class="calculate-button">', unsafe_allow_html=True)
+            if st.button("🔄 Analyze Investment Options", use_container_width=True):
+                with st.spinner("⚡ Analyzing your investment options..."):
+                    
+                    # Perform calculations
+                    analysis_results = perform_comprehensive_asset_analysis(
+                        include_mutual_funds, include_real_estate, include_gold, include_fd,
+                        investment_horizon, tax_bracket, inflation_rate
+                    )
+                    
+                    # Store results in session state
+                    st.session_state.asset_analysis_results = analysis_results
+                    
+                    st.success("✅ Analysis completed successfully!")
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Display results if analysis is done
+            if st.session_state.asset_analysis_results:
+                display_comprehensive_analysis_results(st.session_state.asset_analysis_results, selected_assets)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# Helper functions for asset analysis calculations
+def perform_comprehensive_asset_analysis(include_mf, include_re, include_gold, include_fd, horizon, tax_bracket, inflation):
+    results = {}
+    horizon_years = int(horizon.split()[0])
+    tax_rate = float(tax_bracket.strip('%')) / 100
+    
+    # Mutual Funds Analysis
+    if include_mf and not st.session_state.mf_schemes.empty:
+        mf_results = analyze_mutual_funds_comprehensive(st.session_state.mf_schemes, horizon_years, tax_rate)
+        if mf_results:
+            results['Mutual Funds'] = mf_results
+    
+    # Real Estate Analysis
+    if include_re and st.session_state.get('prop_purchase', 0) > 0:
+        re_results = analyze_real_estate_comprehensive(horizon_years, tax_rate, inflation)
+        if re_results:
+            results['Real Estate'] = re_results
+    
+    # Gold Analysis
+    if include_gold and st.session_state.get('gold_qty', 0) > 0:
+        gold_results = analyze_gold_comprehensive(horizon_years, tax_rate, inflation)
+        if gold_results:
+            results['Gold'] = gold_results
+    
+    # Fixed Deposits Analysis with Accrual Tax
+    if include_fd and st.session_state.get('fd_amount', 0) > 0:
+        fd_results = analyze_fd_with_accrual_tax(horizon_years, tax_rate)
+        if fd_results:
+            results['Fixed Deposits'] = fd_results
+    
+    return results
+
+def analyze_mutual_funds_comprehensive(mf_data, years, tax_rate):
+    # Filter out empty rows
+    mf_data = mf_data[
+        (mf_data['Invested Amount (Rs.)'] > 0) | 
+        (mf_data['Current Value (Rs.)'] > 0)
+    ]
+    
+    if mf_data.empty:
+        return None
+    
+    total_invested = mf_data['Invested Amount (Rs.)'].sum()
+    total_current = mf_data['Current Value (Rs.)'].sum()
+    
+    if total_invested == 0:
+        return None
+    
+    current_gains = total_current - total_invested
+    
+    # Calculate tax implications based on holding period and category
+    total_tax_impact = 0
+    total_exit_load = 0
+    
+    for _, scheme in mf_data.iterrows():
+        if scheme['Investment Date'] and pd.notna(scheme['Investment Date']):
+            holding_days = (datetime.now().date() - scheme['Investment Date']).days
+            gains = scheme['Current Value (Rs.)'] - scheme['Invested Amount (Rs.)']
+            
+            # Tax calculation based on category and holding period
+            if scheme['Category'] in ['Equity Large Cap', 'Equity Mid Cap', 'Equity Small Cap', 'ELSS']:
+                if holding_days > 365:  # LTCG
+                    tax_on_gains = max(0, (gains - 100000) * 0.10) if gains > 100000 else 0
+                else:  # STCG
+                    tax_on_gains = gains * 0.15 if gains > 0 else 0
+            else:  # Debt funds
+                if holding_days > 1095:  # LTCG with indexation
+                    tax_on_gains = gains * 0.20 if gains > 0 else 0
+                else:  # STCG
+                    tax_on_gains = gains * tax_rate if gains > 0 else 0
+            
+            total_tax_impact += tax_on_gains
+            
+            # Exit load (typically 1% if < 1 year)
+            if holding_days < 365:
+                total_exit_load += scheme['Current Value (Rs.)'] * 0.01
+    
+    net_proceeds = total_current - total_tax_impact - total_exit_load
+    
+    # Future projection based on asset mix
+    equity_schemes = len(mf_data[mf_data['Category'].str.contains('Equity|ELSS', na=False)])
+    debt_schemes = len(mf_data[mf_data['Category'].str.contains('Debt', na=False)])
+    hybrid_schemes = len(mf_data[mf_data['Category'].str.contains('Hybrid', na=False)])
+    
+    total_schemes = len(mf_data)
+    equity_ratio = equity_schemes / total_schemes
+    debt_ratio = debt_schemes / total_schemes
+    hybrid_ratio = hybrid_schemes / total_schemes
+    
+    expected_return = (equity_ratio * 12) + (debt_ratio * 7) + (hybrid_ratio * 9)
+    
+    future_value = total_current * ((1 + expected_return/100) ** years)
+    
+    return {
+        'current_value': total_current,
+        'invested_amount': total_invested,
+        'current_gains': current_gains,
+        'tax_impact': total_tax_impact,
+        'exit_load': total_exit_load,
+        'net_proceeds': net_proceeds,
+        'future_value': future_value,
+        'expected_return': expected_return,
+        'liquidity': 'High',
+        'risk_level': 'Medium to High' if equity_ratio > 0.5 else 'Low to Medium'
+    }
+
+def analyze_real_estate_comprehensive(years, tax_rate, inflation):
+    purchase_value = st.session_state.get('prop_purchase', 0)
+    current_value = st.session_state.get('prop_current', 0)
+    rental_income = st.session_state.get('rental_income', 0) * 12
+    maintenance_cost = st.session_state.get('maintenance', 0)
+    
+    if purchase_value == 0 or current_value == 0:
+        return None
+    
+    current_gains = current_value - purchase_value
+    holding_days = (datetime.now().date() - st.session_state.get('prop_date', datetime.now().date())).days
+    
+    # Tax calculation for real estate
+    if holding_days > 730:  # LTCG (2 years for real estate)
+        indexed_cost = purchase_value * (1 + inflation/100) ** (holding_days/365)
+        taxable_gains = max(0, current_value - indexed_cost)
+        tax_impact = taxable_gains * 0.20
+    else:  # STCG
+        tax_impact = current_gains * tax_rate if current_gains > 0 else 0
+    
+    net_proceeds = current_value - tax_impact
+    
+    # Future projection (real estate appreciation + rental yield)
+    future_capital_value = current_value * ((1 + 8/100) ** years)
+    future_rental_income = rental_income * years * (1 + inflation/100) ** (years/2)
+    total_future_value = future_capital_value + future_rental_income - (maintenance_cost * years)
+    
+    return {
+        'current_value': current_value,
+        'invested_amount': purchase_value,
+        'current_gains': current_gains,
+        'tax_impact': tax_impact,
+        'exit_load': 0,
+        'net_proceeds': net_proceeds,
+        'future_value': total_future_value,
+        'expected_return': 8.0,
+        'liquidity': 'Low',
+        'risk_level': 'Medium'
+    }
+
+def analyze_gold_comprehensive(years, tax_rate, inflation):
+    purchase_price = st.session_state.get('gold_purchase_price', 0)
+    quantity = st.session_state.get('gold_qty', 0)
+    current_price = st.session_state.get('gold_current_price', 0)
+    storage_cost = st.session_state.get('gold_storage', 0)
+    
+    if purchase_price == 0 or quantity == 0 or current_price == 0:
+        return None
+    
+    purchase_value = purchase_price * quantity
+    current_value = current_price * quantity
+    current_gains = current_value - purchase_value
+    holding_days = (datetime.now().date() - st.session_state.get('gold_date', datetime.now().date())).days
+    
+    # Tax calculation for gold
+    if holding_days > 1095:  # LTCG (3 years for gold)
+        tax_impact = current_gains * 0.20 if current_gains > 0 else 0
+    else:  # STCG
+        tax_impact = current_gains * tax_rate if current_gains > 0 else 0
+    
+    net_proceeds = current_value - tax_impact
+    
+    # Future projection (gold typically beats inflation by 2-3%)
+    future_value = current_value * ((1 + (inflation + 2)/100) ** years) - (storage_cost * years)
+    
+    return {
+        'current_value': current_value,
+        'invested_amount': purchase_value,
+        'current_gains': current_gains,
+        'tax_impact': tax_impact,
+        'exit_load': 0,
+        'net_proceeds': net_proceeds,
+        'future_value': future_value,
+        'expected_return': inflation + 2,
+        'liquidity': 'Medium',
+        'risk_level': 'Low to Medium'
+    }
+
+def analyze_fd_with_accrual_tax(years, tax_rate):
+    """Analyze FD with proper accrual tax implementation"""
+    principal = st.session_state.get('fd_amount', 0)
+    annual_rate = st.session_state.get('fd_rate', 7.5)
+    tenure = st.session_state.get('fd_tenure', 3)
+    
+    if principal == 0:
+        return None
+    
+    # Calculate FD maturity with accrual tax (annual taxation of interest)
+    amount = principal
+    total_tax_paid = 0
+    
+    # Apply accrual tax year by year
+    for year in range(min(years, tenure)):
+        interest_earned = amount * annual_rate / 100
+        tax_on_interest = interest_earned * tax_rate
+        net_interest = interest_earned - tax_on_interest
+        amount += net_interest
+        total_tax_paid += tax_on_interest
+    
+    # If investment horizon is longer than FD tenure, reinvest at maturity
+    if years > tenure:
+        remaining_years = years - tenure
+        for year in range(remaining_years):
+            interest_earned = amount * annual_rate / 100
+            tax_on_interest = interest_earned * tax_rate
+            net_interest = interest_earned - tax_on_interest
+            amount += net_interest
+            total_tax_paid += tax_on_interest
+    
+    net_proceeds = amount
+    effective_annual_return = ((amount / principal) ** (1/years) - 1) * 100
+    
+    return {
+        'current_value': principal,
+        'invested_amount': principal,
+        'current_gains': 0,
+        'tax_impact': total_tax_paid,
+        'exit_load': 0,
+        'net_proceeds': net_proceeds,
+        'future_value': net_proceeds,
+        'expected_return': effective_annual_return,
+        'liquidity': 'Medium',
+        'risk_level': 'Very Low'
+    }
+
+def display_comprehensive_analysis_results(results, selected_assets):
+    st.markdown("## 📊 Investment Analysis Results")
+    
+    # Create comparison table
+    comparison_data = []
+    for asset_class, data in results.items():
+        if data:
+            comparison_data.append({
+                'Asset Class': asset_class,
+                'Current Value': f"Rs.{format_indian_number(data['current_value'])}",
+                'Current Gains/Loss': f"Rs.{format_indian_number(data['current_gains'])}",
+                'Tax Impact': f"Rs.{format_indian_number(data['tax_impact'])}",
+                'Net Proceeds Today': f"Rs.{format_indian_number(data['net_proceeds'])}",
+                'Future Value': f"Rs.{format_indian_number(data['future_value'])}",
+                'Expected Return': f"{data['expected_return']:.1f}%",
+                'Liquidity': data['liquidity'],
+                'Risk Level': data['risk_level']
+            })
+    
+    if comparison_data:
+        df = pd.DataFrame(comparison_data)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+        
+        # Create visualizations
+        st.markdown("### 📈 Visual Comparison")
+        
+        # Future value comparison chart
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+        
+        # Chart 1: Current vs Future Value
+        asset_names = [data['Asset Class'] for data in comparison_data]
+        current_values = [float(data['Current Value'].replace('Rs.', '').replace(',', '')) for data in comparison_data]
+        future_values = [float(data['Future Value'].replace('Rs.', '').replace(',', '')) for data in comparison_data]
+        
+        x = range(len(asset_names))
+        width = 0.35
+        
+        ax1.bar([i - width/2 for i in x], current_values, width, label='Current Value', color='#4facfe', alpha=0.7)
+        ax1.bar([i + width/2 for i in x], future_values, width, label='Future Value', color='#00f2fe', alpha=0.7)
+        
+        ax1.set_xlabel('Asset Classes')
+        ax1.set_ylabel('Value (Rs.)')
+        ax1.set_title('Current vs Future Value Comparison')
+        ax1.set_xticks(x)
+        ax1.set_xticklabels(asset_names, rotation=45)
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+        
+        # Chart 2: Expected Returns
+        returns = [float(data['Expected Return'].replace('%', '')) for data in comparison_data]
+        colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'][:len(asset_names)]
+        
+        ax2.bar(asset_names, returns, color=colors, alpha=0.7)
+        ax2.set_xlabel('Asset Classes')
+        ax2.set_ylabel('Expected Return (%)')
+        ax2.set_title('Expected Annual Returns')
+        ax2.set_xticklabels(asset_names, rotation=45)
+        ax2.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        st.pyplot(fig)
+        plt.close()
+        
+        # Investment Recommendations
+        st.markdown("### 💡 Investment Recommendations")
+        
+        best_return = max(comparison_data, key=lambda x: float(x['Expected Return'].replace('%', '')))
+        
+        risk_mapping = {'Very Low': 1, 'Low': 2, 'Low to Medium': 2.5, 'Medium': 3, 'Medium to High': 4, 'High': 5}
+        lowest_risk = min(comparison_data, key=lambda x: risk_mapping.get(x['Risk Level'], 3))
+        
+        liquidity_mapping = {'Low': 1, 'Medium': 2, 'High': 3}
+        highest_liquidity = max(comparison_data, key=lambda x: liquidity_mapping.get(x['Liquidity'], 2))
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-label">Highest Return Potential</div>
+                <div class="metric-value">{best_return['Asset Class']}</div>
+                <div class="metric-label">{best_return['Expected Return']} Expected Return</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-label">Lowest Risk Option</div>
+                <div class="metric-value">{lowest_risk['Asset Class']}</div>
+                <div class="metric-label">{lowest_risk['Risk Level']} Risk</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-label">Highest Liquidity</div>
+                <div class="metric-value">{highest_liquidity['Asset Class']}</div>
+                <div class="metric-label">{highest_liquidity['Liquidity']} Liquidity</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # PDF Generation
+        st.markdown('<div class="calculate-button">', unsafe_allow_html=True)
+        if st.button("📄 Generate Asset Comparison Report"):
+            generate_comprehensive_asset_pdf(results, comparison_data, selected_assets)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+def generate_comprehensive_asset_pdf(results, comparison_data, selected_assets):
+    """Generate comprehensive PDF report for asset comparison with proper formatting"""
+    buffer = BytesIO()
+    styles = getSampleStyleSheet()
+    
+    # Define styles
+    heading_style = ParagraphStyle(
+        name='ReportHeading', 
+        fontSize=20, 
+        leading=24, 
+        alignment=TA_CENTER,
+        spaceAfter=20, 
+        fontName='Helvetica-Bold',
+        textColor=colors.black
+    )
+    
+    subheading_style = ParagraphStyle(
+        name='SubHeading',
+        fontSize=14,
+        leading=18,
+        spaceAfter=10,
+        spaceBefore=15,
+        fontName='Helvetica-Bold',
+        textColor=colors.black
+    )
+    
+    normal_style = ParagraphStyle(
+        name='Normal', 
+        parent=styles['Normal'], 
+        fontSize=10, 
+        leading=14,
+        fontName=UNICODE_FONT
+    )
+    
+    # Header style for table with word wrapping
+    header_cell_style = ParagraphStyle(
+        name='HeaderCell',
+        parent=styles['Normal'],
+        fontSize=9,
+        leading=11,
+        alignment=1,  # Center alignment
+        fontName='Helvetica-Bold',
+        wordWrap='CJK'
+    )
+    
+    # Body cell style
+    body_cell_style = ParagraphStyle(
+        name='BodyCell',
+        parent=styles['Normal'],
+        fontSize=9,
+        leading=11,
+        fontName=UNICODE_FONT
+    )
+    
+    elements = []
+    
+    # Title
+    elements.append(Paragraph("Multi-Asset Class Investment Analysis Report", heading_style))
+    elements.append(Paragraph(f"Generated on: {datetime.now().strftime('%d-%m-%Y %H:%M')}", normal_style))
+    elements.append(Spacer(1, 20))
+    
+    # Executive Summary
+    elements.append(Paragraph("Executive Summary", subheading_style))
+    elements.append(Paragraph(f"This report analyzes {len(selected_assets)} asset classes: {', '.join(selected_assets)}.", normal_style))
+    elements.append(Spacer(1, 15))
+    
+    # Asset Comparison Table with FIXED column widths and wrapped headers
+    elements.append(Paragraph("Asset Class Comparison", subheading_style))
+    
+    # Create table with wrapped headers
+    table_data = []
+    
+    # Header row with wrapped text
+    header_row = [
+        Paragraph("Asset Class", header_cell_style),
+        Paragraph("Current Value", header_cell_style),
+        Paragraph("Net Proceeds Today", header_cell_style),
+        Paragraph("Future Value", header_cell_style),
+        Paragraph("Expected Return", header_cell_style),
+        Paragraph("Risk Level", header_cell_style)
+    ]
+    table_data.append(header_row)
+    
+    # Data rows
+    for data in comparison_data:
+        table_data.append([
+            Paragraph(data['Asset Class'], body_cell_style),
+            Paragraph(data['Current Value'], body_cell_style),
+            Paragraph(data['Net Proceeds Today'], body_cell_style),
+            Paragraph(data['Future Value'], body_cell_style),
+            Paragraph(data['Expected Return'], body_cell_style),
+            Paragraph(data['Risk Level'], body_cell_style)
+        ])
+    
+    # FIXED column widths to prevent spill-over
+    comparison_table = Table(table_data, colWidths=[2.8*cm, 2.5*cm, 2.5*cm, 2.5*cm, 2.2*cm, 2.5*cm])
+    comparison_table.setStyle(TableStyle([
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ('BACKGROUND', (0, 0), (-1, 0), HexColor('#E6F3F8')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),  # Right align values
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+    ]))
+    
+    elements.append(comparison_table)
+    elements.append(Spacer(1, 20))
+    
+    # Investment Recommendations
+    elements.append(Paragraph("Investment Recommendations", subheading_style))
+    
+    best_return = max(comparison_data, key=lambda x: float(x['Expected Return'].replace('%', '')))
+    elements.append(Paragraph(f"• <b>Highest Return Potential:</b> {best_return['Asset Class']} with {best_return['Expected Return']} expected annual return", normal_style))
+    
+    risk_mapping = {'Very Low': 1, 'Low': 2, 'Low to Medium': 2.5, 'Medium': 3, 'Medium to High': 4, 'High': 5}
+    lowest_risk = min(comparison_data, key=lambda x: risk_mapping.get(x['Risk Level'], 3))
+    elements.append(Paragraph(f"• <b>Lowest Risk Option:</b> {lowest_risk['Asset Class']} with {lowest_risk['Risk Level']} risk profile", normal_style))
+    
+    liquidity_mapping = {'Low': 1, 'Medium': 2, 'High': 3}
+    highest_liquidity = max(comparison_data, key=lambda x: liquidity_mapping.get(x['Liquidity'], 2))
+    elements.append(Paragraph(f"• <b>Highest Liquidity:</b> {highest_liquidity['Asset Class']} offers {highest_liquidity['Liquidity']} liquidity", normal_style))
+    
+    elements.append(Spacer(1, 20))
+    
+    # Important Tax Considerations
+    elements.append(Paragraph("Important Tax Considerations", subheading_style))
+    elements.append(Paragraph("• <b>Accrual Tax on Fixed Deposits:</b> FD interest is taxed annually, reducing effective compounding returns", normal_style))
+    elements.append(Paragraph("• Mutual fund taxes are deferred until redemption (STCG/LTCG applicable)", normal_style))
+    elements.append(Paragraph("• Real estate enjoys indexation benefits for LTCG after 2 years", normal_style))
+    elements.append(Paragraph("• Gold has LTCG benefits after 3 years of holding", normal_style))
+
+    # Add Charts Section
+    elements.append(PageBreak())
+    elements.append(Paragraph("Visual Analysis", subheading_style))
+    
+    # Create matplotlib charts - STACKED VERTICALLY
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))  # Changed from (1, 2) to (2, 1)
+
+    # Extract data for charts
+    asset_names = [data['Asset Class'] for data in comparison_data]
+    current_values = [float(data['Current Value'].replace('Rs.', '').replace(',', '')) for data in comparison_data]
+    future_values = [float(data['Future Value'].replace('Rs.', '').replace(',', '')) for data in comparison_data]
+    returns = [float(data['Expected Return'].replace('%', '')) for data in comparison_data]
+
+    # Chart 1: Current vs Future Value (TOP)
+    x = range(len(asset_names))
+    width = 0.35
+
+    ax1.bar([i - width/2 for i in x], current_values, width, label='Current Value', 
+            color='#4facfe', alpha=0.8)
+    ax1.bar([i + width/2 for i in x], future_values, width, label='Future Value', 
+            color='#00f2fe', alpha=0.8)
+
+    ax1.set_xlabel('Asset Classes')
+    ax1.set_ylabel('Value (Rs.)')
+    ax1.set_title('Current vs Future Value Comparison', fontweight='bold', fontsize=12)
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(asset_names, rotation=45, ha='right')
+    ax1.legend()
+    ax1.grid(True, alpha=0.3, axis='y')
+
+    # Chart 2: Expected Returns (BOTTOM)
+    colors_list = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'][:len(asset_names)]
+
+    bars = ax2.bar(asset_names, returns, color=colors_list, alpha=0.8)
+    ax2.set_xlabel('Asset Classes')
+    ax2.set_ylabel('Expected Return (%)')
+    ax2.set_title('Expected Annual Returns', fontweight='bold', fontsize=12)
+    ax2.set_xticklabels(asset_names, rotation=45, ha='right')
+    ax2.grid(True, alpha=0.3, axis='y')
+
+    # Add value labels on bars
+    for bar, value in zip(bars, returns):
+        ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.1, 
+                f'{value:.1f}%', ha='center', va='bottom', fontweight='bold')
+
+    plt.tight_layout()  # Important for vertical stacking
+
+    # Save chart to buffer and add to PDF
+    chart_buffer = BytesIO()
+    plt.savefig(chart_buffer, format='png', bbox_inches='tight', dpi=300)
+    plt.close(fig)
+    chart_buffer.seek(0)
+
+    # Insert chart into PDF with adjusted dimensions
+    chart_image = Image(chart_buffer, width=14*cm, height=12*cm)  # Adjusted height for vertical layout
+    elements.append(chart_image)
+    elements.append(Spacer(1, 20))
+
+    
+    
+    # Page break before disclaimer
+    elements.append(PageBreak())
+    
+    # Disclaimer
+    elements.append(Spacer(1, 30))
+    elements.append(Paragraph("DISCLAIMER", ParagraphStyle(
+        name='DisclaimerHeading', 
+        fontSize=16, 
+        leading=24, 
+        alignment=TA_CENTER,
+        spaceAfter=25, 
+        fontName='Helvetica-Bold'
+    )))
+    
+    disclaimer_style = ParagraphStyle(
+        name='DisclaimerStyle', 
+        parent=styles['Normal'], 
+        fontSize=9, 
+        leading=11,
+        fontName=UNICODE_FONT
+    )
+    
+    # Add special note about FD accrual tax
+    elements.append(Paragraph("*Important: Fixed Deposit (FD) interest is subject to annual accrual tax which reduces compounding returns. This means tax is deducted yearly on interest earned, significantly impacting the final maturity amount compared to investments where tax is deferred until redemption.", disclaimer_style))
+    elements.append(Spacer(1, 10))
+    
+    disclaimer_paragraphs = [p.strip() for p in DISCLAIMER_TEXT.split('.') if p.strip()]
+    for paragraph in disclaimer_paragraphs:
+        if paragraph:
+            elements.append(Paragraph(paragraph + ".", disclaimer_style))
+            elements.append(Spacer(1, 3))
+    
+    # Build PDF with consistent header and footer
+    doc = SimpleDocTemplate(buffer, pagesize=A4, 
+                          rightMargin=cm, leftMargin=cm, 
+                          topMargin=5*cm, bottomMargin=3*cm)
+    doc.build(elements, onFirstPage=header_footer_with_logos, 
+             onLaterPages=header_footer_with_logos)
+    
+    buffer.seek(0)
+    
+    st.success("Asset Comparison Report generated successfully!")
+    st.download_button(
+        label="✅ Download Asset Comparison Report PDF",
+        data=buffer,
+        file_name=f"Asset_Comparison_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+        mime="application/pdf",
+        use_container_width=True
+    )
+
+
+
 # --- Main App Logic ---
 def main():
     if st.session_state.app_mode is None:
@@ -2246,6 +3037,8 @@ def main():
         show_minutes_of_meeting()
     elif st.session_state.app_mode == "checklist":
         show_meeting_checklist()
+    elif st.session_state.app_mode == "decision_analyzer":  # ADD THIS LINE
+        show_asset_decision_analyzer()
 
 if __name__ == "__main__":
     main()
